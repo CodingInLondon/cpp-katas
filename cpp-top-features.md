@@ -1,4 +1,4 @@
-# Modern C++ - 5 popular features of each version
+# Modern C++ - My top 5 features for each version
 Modern C++ evolution (C++11 onward) has been driven by **developer demand for safer, more expressive, and less verbose code**. Each new standard extended that trend: 
 
 
@@ -13,7 +13,7 @@ timeline
  2026: C++26 - Next-Gen (reflection, contracts, safety)
 ```
 
-What are the most popular features in each version?
+They make C++ faster, more explicit, and sometimes safer. Modern C++ is still as close to the metal as you can get and yes, you can still shoot yourself in the foot if you're not careful. 
 
 ---
 
@@ -97,8 +97,8 @@ What are the most popular features in each version?
 
 5. **`decltype(auto)` return** – *Purpose:* Deduce return type exactly as the returned expression (including references). It preserves const/ref qualifiers automatically. 
    ```cpp
-   std::string& get1();
-   std::string get2();
+   std::string& get1() { static std::string s = "hello"; return s; }
+   std::string get2() { return "world"; }
    decltype(auto) wrapper1() { return get1(); } // returns std::string&
    decltype(auto) wrapper2() { return get2(); } // returns std::string
    ``` 
