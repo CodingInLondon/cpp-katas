@@ -295,9 +295,9 @@ They make C++ faster, more explicit, and sometimes safer. Modern C++ is still as
 
 ---
 
-# Summary Table of Top Features
+# Summary Table
 
-| Standard | Top Feature | Why Loved (Developer View) |
+| Standard | Feature | Why we like it |
 |----------|-----------------------|------------------------------------------------|
 | **C++11** | auto type deduction | Concise code, type safety (auto-tracks type) |
 | | Move semantics | Performance (enables `std::move`, no unnecessary copies) |
