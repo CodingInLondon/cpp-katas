@@ -68,7 +68,7 @@ They make C++ faster, more explicit, and sometimes safer. Modern C++ is still as
 1. **Generic lambdas** (`auto` parameters) – *Purpose:* Let a lambda deduce parameter types automatically, making lambdas templated. One lambda can handle multiple types. 
    ```cpp
    auto f = [](auto a, auto b) { return a + b; };
-   std::cout << f(2, 3) << f(2.5, 4.5); // outputs 5 and 7.0
+   std::cout << f(2, 3) << f(2.5, 4.5); // outputs 5 and 7
    ``` 
    *Use-case:* Useful for writing reusable callbacks (e.g. `std::sort`) without hand-writing templates. Eliminates boilerplate lambda templates.
 
@@ -180,18 +180,28 @@ They make C++ faster, more explicit, and sometimes safer. Modern C++ is still as
 
    struct Task {
        struct promise_type {
-           Task get_return_object() { return {}; }
+           Task get_return_object() {
+               return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
+           }
            std::suspend_never initial_suspend() noexcept { return {}; }
            std::suspend_never final_suspend() noexcept { return {}; }
            void return_void() {}
            void unhandled_exception() { std::terminate(); }
        };
+
+       std::coroutine_handle<promise_type> handle;
    };
 
    Task async_work() {
        std::cout << "Start work\n";
        co_await std::suspend_always{}; // suspend coroutine here
        std::cout << "Resume work\n";
+   }
+
+   int main() {
+       Task t = async_work();      // runs up to the co_await, prints "Start work"
+       std::cout << "Suspended, back in main\n";
+       t.handle.resume();          // prints "Resume work", coroutine runs to completion
    }
    ``` 
    *Use-case:* Useful for async I/O, event loops, and generators. (Trade-off: complexity of promises/schedulers; debugging stacks can be non-obvious.)
