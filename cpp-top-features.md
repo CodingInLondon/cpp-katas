@@ -1,7 +1,7 @@
 # Modern C++ - Top 5 features for each version
 
 
-Modern C++ evolution (C++11 onward) has been driven by **developer demand for safer, more expressive, and less verbose code**. Each new standard extended that trend: 
+Modern C++ evolution (C++11 onward) has been driven by developer demand for **safer, more expressive, and less verbose code**. Each new standard extended that trend: 
 
 
 ```mermaid
@@ -15,9 +15,9 @@ timeline
  2026: C++26 - Next-Gen (reflection, contracts, safety)
 ```
 
-They make C++ faster, more explicit, and (sometimes) safer. Modern C++ is still as close to the metal as you can get and yes, you can still shoot yourself in the foot if you're not careful. 
+They make C++ faster, more explicit, and (sometimes) safer. Modern C++ is still as close to the metal as you can get and yes, **you can still shoot yourself in the foot if you're not careful**. 
 
-This doc is a quick overview of these new features. For each version I arbitrarily picked 5.
+This document is a quick overview of the new features. For each version we arbitrarily picked **five**.
 
 
 ---
