@@ -3,17 +3,17 @@
 
 Bitcoin Core can be considered a latency-sensitive system. 
 
-Though its latency budget is measured in milliseconds to seconds (not nanoseconds as in HFT and electronic trading) and though it never touches the most extreme parts of the low-latency toolkit (kernel-bypass networking, cache-line padding against false sharing, busy-spin locks), it still has consensus-critical **hot paths**: 
+Although its latency budget is measured in milliseconds to seconds (not nanoseconds as in HFT and electronic trading) and though it never touches the most extreme parts of the low-latency toolkit (kernel-bypass networking, cache-line padding against false sharing, busy-spin locks), it still has a number of **hot paths**: 
 - block and transaction validation, 
 - signature checking, 
 - the UTXO cache and 
 - the P2P message loop 
 
-face exactly the pressures a trading engine faces: 
+They all face some of the pressures a trading engine faces: 
 
 *don't allocate on the heap, stay in cache, don't take locks.*
 
-The objective of this report is to give an overview of the low latency patterns (or at least a subset of them) through concrete examples in a large, heavily reviewed, production codebase.
+The objective of this report is to give an overview of low latency patterns (or at least a subset of them) through concrete examples in a large, heavily reviewed, production codebase that has now been running uninterrupted for 17 years.
 
 ---
 
@@ -27,7 +27,7 @@ Three properties matter:
 
 **Jitter (tail latency).** The variance in latency, not its average. A path that takes 1&nbsp;µs on average but occasionally spikes to 500&nbsp;µs is often worse than one that reliably takes 5&nbsp;µs, because the spikes are what lose the race, blow the deadline, or overflow a buffer. Practitioners care about the *distribution* (p99, p99.9) and the worst case far more than the *mean*. Most low-latency engineering is really *jitter* engineering.
 
-**Predictability (determinism).** The absence of operations whose cost you cannot bound: heap allocation (which can walk free-lists, take a global lock, or trigger a system call), page faults, cache and TLB misses, lock contention, and syscalls that cross into the kernel. Removing these sources of non-determinism is what flattens the tail. Almost every pattern in Section 3 is, at heart, a way to make a step's cost *knowable in advance*.
+**Predictability (determinism).** The absence of operations whose cost you cannot predict: heap allocation (which can walk free-lists, take a global lock, or trigger a system call), page faults, TLB misses, cache misses (L1, L2, L3), lock contention, and system calls that cross into the kernel. Removing these sources of non-determinism is what flattens the tail. Almost every pattern in Section 3 is, at heart, a way to make execution cost *knowable in advance*.
 
 ### When is it necessary? Only in the hot path.
 
