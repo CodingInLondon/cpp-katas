@@ -1,9 +1,13 @@
 # Low Latency Patterns in Bitcoin Core
 
 
-Bitcoin Core can be considered a latency-sensitive system. 
+Bitcoin Core is the software running on all nodes that compose the Bitcoin network. 
 
-Although its latency budget is measured in milliseconds to seconds (not nanoseconds as in HFT and electronic trading) and though it never touches the most extreme parts of the low-latency toolkit (kernel-bypass networking, cache-line padding against false sharing, busy-spin locks), it still has a number of **hot paths**: 
+There are somewhere between 20000 and 100000 of those nodes, scattered around the globe. Most of them just receive, validate and relay transactions. A few of them build new blocks and broadcast them. The whole logic is coded in good old C++ and is actively maintained, with roughly 2 releases per year. Currently the latest version is v30.
+
+Can Bitcoin Core be considered a low-latency system?
+
+Although its latency budget is measured in milliseconds to seconds (not nanoseconds as in HFT and electronic trading) and although it never touches the most extreme parts of the low-latency toolkit (kernel-bypass networking, cache-line padding against false sharing), it still has a number of **hot paths**: 
 - block and transaction validation, 
 - signature checking, 
 - the UTXO cache and 
@@ -13,13 +17,13 @@ They all face some of the pressures a trading engine faces:
 
 *don't allocate on the heap, stay in cache, don't take locks.*
 
-The objective of this report is to give an overview of low latency patterns (or at least a subset of them) through concrete examples in a large, heavily reviewed, production codebase that has now been running uninterrupted for 17 years.
+The objective of this doc is to give an overview of low latency patterns (or at least a subset of them) through concrete examples in a large, heavily reviewed, production codebase that has been running uninterrupted for 17 years.
 
 ---
 
 ## 1. What is low-latency programming?
 
-Low-latency programming optimizes for **how long a single operation takes**, not how many operations you can do per second. Those two goals — latency and throughput — often pull in opposite directions, and the discipline is largely about knowing when you are optimizing for which.
+Low-latency programming optimizes for **how long a single operation takes** (latency) not how many operations you can do per second (throughput). Those two goals often pull in opposite directions, and the discipline is largely about knowing when you are optimizing for which.
 
 Three properties matter:
 
@@ -27,26 +31,32 @@ Three properties matter:
 
 **Jitter (tail latency).** The variance in latency, not its average. A path that takes 1&nbsp;µs on average but occasionally spikes to 500&nbsp;µs is often worse than one that reliably takes 5&nbsp;µs, because the spikes are what lose the race, blow the deadline, or overflow a buffer. Practitioners care about the *distribution* (p99, p99.9) and the worst case far more than the *mean*. Most low-latency engineering is really *jitter* engineering.
 
-**Predictability (determinism).** The absence of operations whose cost you cannot predict: heap allocation (which can walk free-lists, take a global lock, or trigger a system call), page faults, TLB misses, cache misses (L1, L2, L3), lock contention, and system calls that cross into the kernel. Removing these sources of non-determinism is what flattens the tail. Almost every pattern in Section 3 is, at heart, a way to make execution cost *knowable in advance*.
+**Predictability (determinism).** The absence of operations whose cost you cannot predict: heap allocation (which can walk free-lists, take a global lock, or trigger a system call), page faults, TLB misses, cache misses (L1, L2, L3), lock contention, and system calls that cross into the kernel. Removing these sources of non-determinism is what flattens the tail. Almost every pattern in Section 3 is a way to make execution cost *knowable in advance*.
 
 ### When is it necessary? Only in the hot path.
 
 Low-latency techniques are used only when needed. A program has a *hot path* (the code that runs on every message, every input, every iteration of the inner loop) and a *cold path* (startup, configuration, error handling, teardown, admin RPCs). Optimizing the cold path buys nothing and costs readability. Optimizing the hot path is where all the effort goes.
 
-This is exactly how Core is written. The `PoolAllocator` behind the UTXO map, the `prevector` behind every script, the relaxed atomics in the signature cache — these live on the paths that run millions of times during a sync. The rest of the codebase reads like ordinary, unhurried modern C++. So the first question for any low-latency work — in Core or on a trading desk — is not "how do I make this fast?" but "**is this even on the hot path?**"
+This is exactly how Core is written. The `PoolAllocator` behind the UTXO map, the `prevector` behind every script, the relaxed atomics in the signature cache: they live on the paths that run millions of times during a sync. The rest of the codebase reads like ordinary modern C++. Indeed the first question for any latency-sensitive work should be "**is this even on the hot path?**"
 
 ---
 
 ## 2. Where are the hot paths in Bitcoin Core?
 
-Core has two dominant workloads with quite different characters, and almost all of its optimization pressure historically came from the first.
+Core has two dominant workloads with quite different properties: **IBD** and **relay**. And almost all of its optimization pressure historically came from the first.
 
-**Initial Block Download (IBD) / block validation — a throughput-bound batch job.** When a node syncs, it validates the entire chain as fast as the hardware allows. This is where the pool allocator, the parallel check queue, the caches, and the SIMD hashing kernels earn their keep. The backbone call chain is:
+**Initial Block Download (IBD) / block validation**: **throughput** is the priority. 
+
+Anyone who has attempted to build a node for the first time knows the pain: the initial sync can take days. Making this faster is crucial for adoption. If it takes weeks to build a node then people simply give up (you are not rewarded for running a node unless you mine).
+
+When a node syncs, it validates the entire chain as fast as the hardware allows. This is where the pool allocator, the parallel check queue, the caches, and the SIMD hashing kernels prove to be useful. The backbone call chain is:
 
 ```
 ConnectBlock  →  (per transaction)  CheckInputScripts  →  (per input)  CScriptCheck::operator()
               →  VerifyScript  →  EvalScript  →  ECDSA/Schnorr verify (libsecp256k1)
 ```
+
+For more info about what happens during Initial Block Download and block validation, look-up Andreas' classic [Mastering Bitcoin](https://github.com/bitcoinbook/bitcoinbook/blob/develop/BOOK.md). 
 
 The most CPU-intensive hot paths, in rough order:
 
@@ -56,7 +66,9 @@ The most CPU-intensive hot paths, in rough order:
 4. **Merkle root** — pairs of hashes reduced a whole level at a time to keep SIMD lanes full.
 5. **Serialization / deserialization** — every block, transaction, and P2P message flows through the compile-time serialization machinery; during IBD you deserialize blocks as fast as you can read them.
 
-**Steady-state relay / propagation — where latency, not throughput, matters.** A running node isn't doing IBD; it's relaying transactions and *racing to propagate blocks*. Two hot paths here: **mempool acceptance** (fee-rate ordering, ancestor/descendant tracking, RBF, package validation) and **P2P message handling / compact-block reconstruction**.
+**Steady-state relay / propagation**: **latency** is the priority. 
+
+A running node spends most of its time relaying transactions and *racing to propagate blocks*. Two hot paths here: **mempool acceptance** (fee-rate ordering, ancestor/descendant tracking, RBF, package validation) and **P2P message handling / compact-block reconstruction**.
 
 The block-propagation path is the closest thing Core has to a genuinely latency-critical, tick-to-trade-style path: a miner that loses the propagation race loses money, so validating-and-forwarding a new block quickly has a real economic edge. The difference from a trading desk is only the clock — Core's "tick" is a block roughly every ten minutes, not a quote every microsecond. Same instincts, different timescale.
 
@@ -174,11 +186,13 @@ These four omissions are the crux of the "different regime" point: an HFT desk t
 
 ## 5. Conclusion
 
-Bitcoin Core and a low-latency trading system share a **mechanical toolkit** — arena allocation, small-buffer optimization, relaxed atomics with deliberate memory ordering, lock-free counters, runtime ISA dispatch, compile-time specialization, alignment and allocation discipline — and they share the discipline that governs where to apply it: *only on the hot path, and always to flatten the tail before chasing the mean.*
+Bitcoin Core and a low-latency trading system share a **set of tools**: arena allocation, small-buffer optimization, relaxed atomics with deliberate memory ordering, lock-free counters, runtime ISA dispatch, compile-time specialization, alignment and allocation discipline. They also share the discipline that governs where to apply it: *only on the hot path, and always to flatten the tail before chasing the mean.*
 
 What they don't share is the **regime**. Core's hot paths run on a batch-job budget (validate a chain, accept a transaction, propagate a block), so it stops at the point where extra complexity would buy latency it doesn't need — no prefetch, no false-sharing padding, no spinlocks, no kernel bypass. A trading desk lives past that line, in the nanosecond world where those techniques are mandatory.
 
-That makes Core an unusually good place to study these patterns *in situ*: real, reviewed, production C++ where each technique is used because a measured hot path demanded it, with the reasoning often written into the source. The one framing that captures it: **same primitives, different latency targets.** Learn the primitives here, and the only thing left to add for a trading desk is the last, most extreme layer.
+That makes Core an unusually good place to study these patterns *in situ*: real, reviewed, production C++ where each technique is used because a measured hot path demanded it, with the reasoning often written into the source.  
+
+One could learn the primitives here. Then the only thing left to add for a trading desk is the last, most extreme layer.
 
 ---
 
