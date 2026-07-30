@@ -1,9 +1,9 @@
 # Low Latency Patterns in Bitcoin Core
 
 
-Bitcoin Core is the software running on all nodes that compose the Bitcoin network. 
+Bitcoin Core is the dominant full-node implementation of the Bitcoin network (at least 80% of the nodes run this implementation). 
 
-There are somewhere between 20000 and 100000 of those nodes, scattered around the globe. Most of them just receive, validate and relay transactions. A few of them build new blocks and broadcast them. The whole logic is coded in good old C++ and is actively maintained, with roughly 2 releases per year. Currently the latest version is v30.
+There are somewhere between 15000 and 100000 of those nodes, scattered around the globe (Source: [bitref.com](https://bitref.com/nodes/)). Most of them just receive, validate and relay transactions. A few of them build new blocks and broadcast them. The whole logic is coded in good old C++ and is actively maintained. Core produces about two major releases per year, with additional maintenance releases. 
 
 Can Bitcoin Core be considered a low-latency system?
 
@@ -43,30 +43,69 @@ This is exactly how Core is written. The `PoolAllocator` behind the UTXO map, th
 
 ## 2. Where are the hot paths in Bitcoin Core?
 
-Core has two dominant workloads with quite different properties: **IBD** and **relay**. And almost all of its optimization pressure historically came from the first.
+Core has two dominant workloads with quite different properties: **IBD** and **relay**. 
 
-**Initial Block Download (IBD) / block validation**: **throughput** is the priority. 
+Almost all of its optimization pressure historically came from the first:
+
+**Initial Block Download (IBD) / block validation**
+
+priority: **throughput** 
 
 Anyone who has attempted to build a node for the first time knows the pain: the initial sync can take days. Making this faster is crucial for adoption. If it takes weeks to build a node then people simply give up (you are not rewarded for running a node unless you mine).
 
-When a node syncs, it validates the entire chain as fast as the hardware allows. This is where the pool allocator, the parallel check queue, the caches, and the SIMD hashing kernels prove to be useful. The backbone call chain is:
+When a node syncs, it validates the entire chain as fast as the hardware allows. This is where the pool allocator (`PoolAllocator`), the parallel check queue (`CCheckQueue`) and the caches prove to be useful. The IBD call chain is:
 
-```
-ConnectBlock  →  (per transaction)  CheckInputScripts  →  (per input)  CScriptCheck::operator()
-              →  VerifyScript  →  EvalScript  →  ECDSA/Schnorr verify (libsecp256k1)
+
+
+```mermaid
+flowchart TD
+    A["ConnectBlock<br>per block · opens worker pool"]
+    B["CheckInputScripts<br>per tx · loops inputs"]
+    C["CScriptCheck::operator()<br>per input · unit of parallel work"]
+    D["VerifyScript<br>per input · consensus rules"]
+    E["EvalScript<br>per script · opcode interpreter"]
+    F["ECDSA / Schnorr verify<br>per signature · libsecp256k1 🔥"]
+
+    A -->|"~2.5k txs"| B
+    B -->|"~6k inputs"| C
+    C --> D
+    D --> E
+    E -->|"OP_CHECKSIG family"| F
+
+    Q{{"⑃ CCheckQueue worker pool"}} -. runs .-> C
+    S1{{"✓ script-execution cache"}} -. skips subtree .-> B
+    S2{{"✓ signature cache"}} -. skips subtree .-> C
+
+    classDef s1 fill:#e7eef7,stroke:#3E6FA8,color:#1E1B16
+    classDef s2 fill:#e2f1f4,stroke:#2C93AC,color:#1E1B16
+    classDef s3 fill:#f6ecd6,stroke:#C08A2C,color:#1E1B16
+    classDef s4 fill:#f7e3d4,stroke:#D9662C,color:#1E1B16
+    classDef s5 fill:#f6dcd4,stroke:#C5432A,color:#1E1B16
+    classDef s6 fill:#f2d3d1,stroke:#A62521,color:#1E1B16
+    classDef opt fill:#eef3ec,stroke:#3E7D48,color:#1E1B16
+    class A s1
+    class B s2
+    class C s3
+    class D s4
+    class E s5
+    class F s6
+    class Q,S1,S2 opt
 ```
 
 For more info about what happens during Initial Block Download and block validation, look-up Andreas' classic [Mastering Bitcoin](https://github.com/bitcoinbook/bitcoinbook/blob/develop/BOOK.md). 
 
 The most CPU-intensive hot paths, in rough order:
 
-1. **Script & signature verification** — the epicenter. [`ConnectBlock`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/validation.cpp#L2378) builds a [`CScriptCheck`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/validation.cpp#L2097) per input; each runs the opcode interpreter [`EvalScript`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/script/interpreter.cpp#L406) and, for the `OP_CHECKSIG` family, drops into elliptic-curve verification. This one path is *parallelized* across a worker pool (the check queue) and *short-circuited* by two caches (signature cache + script-execution cache), so it exercises nearly every primitive in Section 3 at once.
-2. **UTXO set access** — [`CCoinsViewCache::FetchCoin`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/coins.cpp#L48) and friends. Every input spent is a lookup, every output created an insert, into a hash map holding ~180M+ entries. This is the *memory-bound* hot path: dominated by random-access cache misses, not compute.
-3. **Hashing** — double-SHA256 for txids, wtxids, merkle roots, block hashes, and the checksum on every network message; SipHash for hash-map salting. Compute-bound and pervasive.
-4. **Merkle root** — pairs of hashes reduced a whole level at a time to keep SIMD lanes full.
-5. **Serialization / deserialization** — every block, transaction, and P2P message flows through the compile-time serialization machinery; during IBD you deserialize blocks as fast as you can read them.
+1. **Script & signature verification**:
+illustrated in the diagram above. [`ConnectBlock`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/validation.cpp#L2378) builds a [`CScriptCheck`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/validation.cpp#L2097) per input; each runs the opcode interpreter [`EvalScript`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/script/interpreter.cpp#L406) and, for the `OP_CHECKSIG` family, drops into elliptic-curve verification. This one path is parallelized across a **worker pool** (the check queue) and supported by two **caches** (signature cache + script-execution cache).
+2. **UTXO set access**: [`CCoinsViewCache::FetchCoin`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/coins.cpp#L48) and friends. Every spent input may require a lookup through the UTXO view hierarchy. Frequently accessed or modified entries reside in `CCoinsViewCache`, while cache misses can reach the backing chainstate database. Performance therefore depends on the configured database cache, workload locality and storage subsystem.
+3. **Hashing**: double-SHA256 for txids, wtxids, merkle roots, block hashes, and the checksum on every network message; SipHash for hash-map salting. Compute-bound and pervasive.
+4. **Merkle root**: pairs of hashes reduced a whole level at a time to keep SIMD lanes full.
+5. **Serialization / deserialization**: every block, transaction, and P2P message flows through the compile-time serialization machinery; during IBD you deserialize blocks as fast as you can read them.
 
-**Steady-state relay / propagation**: **latency** is the priority. 
+**Steady-state relay / propagation**
+
+priority: **latency** 
 
 A running node spends most of its time relaying transactions and *racing to propagate blocks*. Two hot paths here: **mempool acceptance** (fee-rate ordering, ancestor/descendant tracking, RBF, package validation) and **P2P message handling / compact-block reconstruction**.
 
