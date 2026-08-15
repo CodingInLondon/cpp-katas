@@ -139,7 +139,7 @@ The patterns group into four families. Each entry gives the technique, the concr
 
 Bounding allocation cost is the highest-value lever in both worlds, because `malloc` is the classic source of unbounded jitter.
 
-**A1. Custom memory pools / arena allocation.** The most HFT-flavored pattern in the codebase. Rather than hitting `malloc` on every insert, the UTXO cache allocates map nodes from a slab/free-list pool — the "pre-allocate an arena, hand out fixed-size blocks" trick used to keep hot maps off the global heap. [`PoolResource`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/support/allocators/pool.h#L72) is described in-source as similar to `std::pmr::unsynchronized_pool_resource`, holding uniform-size blocks in a free-list, and it is wired into the hottest structure in consensus: [`CCoinsMap`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/coins.h#L224) is a `std::unordered_map<COutPoint, CCoinsCacheEntry, …, PoolAllocator<…>>` — every node comes from the pool, not `new`.
+**A1. Custom memory pools / arena allocation.** The most HFT-flavored pattern in the codebase. Rather than hitting `malloc` on every insert, the UTXO cache allocates map nodes from a slab/free-list pool. The "pre-allocate an arena, hand out fixed-size blocks" trick is used to keep hot maps off the global heap. [`PoolResource`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/support/allocators/pool.h#L72) is described in-source as similar to `std::pmr::unsynchronized_pool_resource`, holding uniform-size blocks in a free-list, and it is wired into the hottest structure in consensus: [`CCoinsMap`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/coins.h#L224) is a `std::unordered_map<COutPoint, CCoinsCacheEntry, …, PoolAllocator<…>>` — every node comes from the pool, not `new`.
 *Trading analogue:* custom allocators / `pmr` / object pools to bound allocation latency and cut fragmentation.
 
 **A2. Small-buffer optimization.** `prevector` stores short sequences inline and only spills to the heap when it outgrows `N` — the same SBO idea behind `boost::small_vector` and fixed-capacity containers. The [`union direct_or_indirect`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/prevector.h#L116) overlays the inline array with the heap pointer, and [`is_direct()`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/prevector.h#L134) is the one-comparison branch that picks between them. It is used for the most numerous small object in the system: [`CScriptBase = prevector<36, uint8_t>`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/script/script.h#L407), sized so the overwhelming majority of scripts never allocate.
@@ -219,15 +219,15 @@ Because Core's budget is milliseconds-to-seconds, it deliberately stops short of
 - **No busy-spin / `_mm_pause` spinlocks** — it uses `std::mutex` and `std::condition_variable`, not user-space spinning. Spinning trades CPU for latency, a trade Core has no reason to make.
 - **No kernel-bypass networking** — plain BSD sockets, not `io_uring` / DPDK / `AF_XDP`. The network path is bounded by propagation across the internet, not by the local stack.
 
-These four omissions are the crux of the "different regime" point: an HFT desk turns exactly these knobs, and Core rationally leaves them alone.
+
 
 ---
 
 ## 5. Conclusion
 
-Bitcoin Core and a low-latency trading system share a **set of tools**: arena allocation, small-buffer optimization, relaxed atomics with deliberate memory ordering, lock-free counters, runtime ISA dispatch, compile-time specialization, alignment and allocation discipline. They also share the discipline that governs where to apply it: *only on the hot path, and always to flatten the tail before chasing the mean.*
+Bitcoin Core and a low-latency trading system share a **set of techniques**: arena allocation, small-buffer optimization, relaxed atomics with deliberate memory ordering, lock-free counters, runtime ISA dispatch, compile-time specialization, alignment and careful allocation. They also share the discipline that governs where to apply these techniques: *only on the hot path, and always to flatten the tail before chasing the mean.*
 
-What they don't share is the **regime**. Core's hot paths run on a batch-job budget (validate a chain, accept a transaction, propagate a block), so it stops at the point where extra complexity would buy latency it doesn't need — no prefetch, no false-sharing padding, no spinlocks, no kernel bypass. A trading desk lives past that line, in the nanosecond world where those techniques are mandatory.
+What they don't share is the **regime**. Core's hot paths run in batch-job mode (validate a chain, accept a transaction, propagate a block), so usage of low-latency coding patterns stops at the point where extra complexity would buy latency that isn't needed: no prefetch, no false-sharing padding, no spinlocks, no kernel bypass. A trading desk lives past that line, in the nanosecond world where those techniques are mandatory.
 
 That makes Core an unusually good place to study these patterns *in situ*: real, reviewed, production C++ where each technique is used because a measured hot path demanded it, with the reasoning often written into the source.  
 
