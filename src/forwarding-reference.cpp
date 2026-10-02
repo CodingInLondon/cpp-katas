@@ -39,6 +39,10 @@ void broken_forwarder(T&& arg) {
     sink(arg);  // 'arg' is a named variable → lvalue, regardless of T
 }
 
+void expects_rvalue(std::string&& s){
+
+}
+
 int main() {
     std::string s = "hello";
 
@@ -64,4 +68,5 @@ int main() {
     broken_forwarder(b);                // → sink(lvalue)
     std::cout << "broken_forwarder(std::move(b)):\n";
     broken_forwarder(std::move(b));     // → sink(lvalue)  ← the bug
+
 }

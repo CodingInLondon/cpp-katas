@@ -1,17 +1,7 @@
 #include <concepts>
 #include <iostream>
+#include <cstdint>
 
-template <std::floating_point T>
-T add_one(T x){
-
-    return x+1;
-}
-
-
-template <std::integral T>
-T twice(T x){
-    return x*2;
-}
 
 
 template <typename T>
@@ -31,19 +21,29 @@ auto divide(T x, U y){
     return x/y;
 }
 
+template <typename T>
+concept Integer = std::is_integral_v<T>;
+
+template<typename T>
+concept Integer32 = std::is_same_v<T, std::int32_t> || std::is_same_v<T, std::uint32_t>;
+
+
+template<Integer32 T>
+class MyClass{
+    MyClass();
+    MyClass(const T& i){
+
+    }
+};
+
+
+
 int main(){
-//    std::cout << add_one(41) << '\n';
 
-    std::cout << add_one(3.14) << '\n';
-
-    std::cout << twice(34) << '\n';
 
     std::cout << midpoint(2, 3.14) << '\n';
 
     std::cout << divide(-1, 2.5) << '\n';
 
-    unsigned int u;
-
-    std::cout << divide(u, 2.5) << '\n';
 }
 

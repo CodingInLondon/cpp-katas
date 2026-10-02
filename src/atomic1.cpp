@@ -16,5 +16,10 @@ void consumer() {
 }
 
 int main(){
+
+    int counter = 0;
+
+    std::atomic_ref<int> count{counter};
+
     return 1;
 }

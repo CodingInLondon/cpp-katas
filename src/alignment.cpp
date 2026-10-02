@@ -2,6 +2,7 @@
 #include <iostream>
 #include <chrono>
 #include <limits>
+#include <vector>
 
 struct Counters {
     int a{0};
@@ -47,4 +48,5 @@ int main() {
 
     CountersAligned c2;
     std::cout << "No false sharing: " << run(c2, n) << " ms\n";
+
 }
