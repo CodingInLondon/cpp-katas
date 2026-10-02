@@ -94,7 +94,7 @@ flowchart TD
 
 For more info about what happens during Initial Block Download and block validation, look-up Andreas' classic [Mastering Bitcoin](https://github.com/bitcoinbook/bitcoinbook/blob/develop/BOOK.md). 
 
-The most CPU-intensive hot paths, in rough order:
+Here are the most CPU-intensive hot paths, in rough order:
 
 1. **Script & signature verification**:
 illustrated in the diagram above. [`ConnectBlock`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/validation.cpp#L2378) builds a [`CScriptCheck`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/validation.cpp#L2097) per input; each runs the opcode interpreter [`EvalScript`](https://github.com/bitcoin/bitcoin/blob/v30.2/src/script/interpreter.cpp#L406) and, for the `OP_CHECKSIG` family, drops into elliptic-curve verification. This one path is parallelized across a **worker pool** (the check queue) and supported by two **caches** (signature cache + script-execution cache).
@@ -212,7 +212,7 @@ The cheapest work is the work the compiler does for you.
 
 ## 4. What Core *doesn't* do (that hardcore HFT does)
 
-Because Core's budget is milliseconds-to-seconds, it deliberately stops short of the most extreme techniques. Naming the boundary is as instructive as the patterns themselves — it's the line between "throughput-conscious systems code" and "nanosecond-regime code."
+Because Core's budget is milliseconds-to-seconds, it deliberately stops short of the most extreme techniques. Naming the boundary is as instructive as the patterns themselves.
 
 - **No explicit prefetching** (`__builtin_prefetch`) — none in the tree, despite the UTXO cache being miss-bound. At Core's timescale the complexity isn't worth it.
 - **No cache-line padding against false sharing** (`alignas(64)` / `hardware_destructive_interference_size`) — not used; the shared atomics aren't hot enough for inter-core contention to dominate.
