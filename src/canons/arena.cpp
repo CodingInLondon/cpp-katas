@@ -25,7 +25,7 @@ public:
     Arena(std::byte* buffer, std::size_t size) noexcept
         : begin_(buffer), current_(buffer), end_(buffer + size) {}
 
-    Arena(const Arena&) = delete;1
+    Arena(const Arena&) = delete;
     Arena& operator=(const Arena&) = delete;
 
     // Raw allocation. Returns nullptr when the arena is exhausted rather
