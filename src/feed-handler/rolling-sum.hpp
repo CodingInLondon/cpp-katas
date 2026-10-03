@@ -1,22 +1,22 @@
-
+#pragma once
 #include <cstdint>
-#include <concepts>
 #include <array>
 #include <atomic>
-
-struct Tick{
-    std::uint64_t price{0};
-    std::uint64_t vol{0};
-    std::uint64_t ts{0}; //timestamp in nanoseconds.
-};
+#include "tick.hpp"
 
 
+
+// Accumulate the sum of quantities over a rolling time window
+// time window is split in buckets
+// Window size (ns) is between (nbuckets-1) * bucketsizens and nbuckets * bucketsizens.
 template <std::size_t nbuckets, std::int64_t bucketsizens>
 class RollingSum{
 
+    static_assert(nbuckets > 0);
+    static_assert(bucketsizens > 0);
 
     struct Bucket{
-        std::uint64_t running_total_vol{0};
+        std::int64_t running_total_vol{0};
     };
 
     public:
@@ -25,54 +25,62 @@ class RollingSum{
     void on_tick(const Tick& tick){
 
         //Is it a new bucket?
-        std::uint64_t current_bucket = tick.ts / bucketsizens;
+        std::int64_t current_bucket = tick.ts_ns / bucketsizens;
+
+        if (current_bucket < _last_bucket) // late tick - drop it
+            return; // we will lose this tick's contribution in the sum
 
         if (current_bucket != _last_bucket){
             // This is a new bucket
             // expire all buckets since the last one.
-            std::size_t last_bucket_index = _current_bucket_index;
-            _current_bucket_index = current_bucket % nbuckets;
 
-            for(auto& i = last_bucket_index+1 ; (i%nbuckets) <= _current_bucket_index; i++){
-                expire_bucket(i%nbuckets);
+            if ( (current_bucket - _last_bucket) > static_cast<std::int64_t>(nbuckets)){
+                //Long silence
+
+                //Reset the bucket buffer and the total
+                _total_vol = 0;
+                // for(std::size_t i = 0 ; i< nbuckets; ++i){
+                //     _buffer[i].running_total_vol = 0;
+                // }
+                _buffer.fill({});
+
             }
+            else{
 
+                // std::size_t current_bucket_index = current_bucket % nbuckets;
+
+                for(auto i = _last_bucket+1 ; i <= current_bucket ; i++){
+                    auto& bucket = _buffer[i%nbuckets]; // wrap around
+
+                    /// Adjust total vol
+                    _total_vol -= bucket.running_total_vol;
+
+                    // reset the bucket
+                    bucket.running_total_vol = 0;
+                }
+            }
         }
 
-        _buffer[_current_bucket_index].runnint_total_vol += tick.vol;
-        _total_vol += tick.vol;
+        _buffer[current_bucket%nbuckets].running_total_vol += tick.qty;
+        _total_vol += tick.qty;
+
+        _last_bucket = current_bucket;
     }
 
     // read the sum. Called by a telemetry thread
-    std::uint64_t get_sum(){
+    std::int64_t get_sum() const{
 
+        // TODO: make this thread-safe
         return _total_vol;
 
     }
 
     private:
 
-    void expire_bucket(std::uint64_t i){
-        // update running totals 
-
-        auto& bucket = _buffer[i];
-
-        /// Adjust total vol
-        _total_vol -= bucket.running_total_vol;
-
-        // reset the bucket
-        bucket.runnint_total_vol = 0;
-        
-    }
-
-    //Final sum shared accross threads
-    std::atomic<std::uint64_t> _sum;
-
     // Total volume accumulator
-    std::uint64_t _total_vol;
+    std::int64_t _total_vol{0};
 
-    std::uint64_t _last_bucket;
-    std::size_t _current_bucket_index;
+    std::int64_t _last_bucket{0};
 
     // Fixed-size array, determines the window size. Window (ns) < nbuckets * bucketsizens
     std::array<Bucket, nbuckets> _buffer;
