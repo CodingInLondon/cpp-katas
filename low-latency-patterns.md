@@ -231,7 +231,6 @@ What they don't share is the **regime**. Core's hot paths run in batch-job mode 
 
 That makes Core an unusually good place to study these patterns *in situ*: real, reviewed, production C++ where each technique is used because a measured hot path demanded it, with the reasoning often written into the source.  
 
-One could learn the primitives here. Then the only thing left to add for a trading desk is the last, most extreme layer.
 
 ---
 
