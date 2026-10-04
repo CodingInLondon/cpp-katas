@@ -8,6 +8,9 @@
 // Run:
 //   ../../build/rolling-sum-regression-test            # exit code 0 = pass
 //   ../../build/rolling-sum-regression-test --print    # print hashes to freeze, skip hash checks
+// Sanitizer build: ASan's stack-use-after-return check makes the run take ~43 s
+// instead of ~0.3 s (the -O2 build takes ~0.03 s). Turn that one check off:
+//   ASAN_OPTIONS=detect_stack_use_after_return=0 ../../build/rolling-sum-regression-test
 //
 // Three layers:
 //   1. Input fingerprint: the corpus must be the one the hashes were frozen against.
