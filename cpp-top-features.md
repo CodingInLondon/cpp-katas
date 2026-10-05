@@ -1,7 +1,7 @@
 # Modern C++ - Top 5 features for each version
 
 
-If you're into C#, Python or Rust, you might wonder what it is about C++ that is modern. "Modern C++" refers to all versions since C++11. There has been one every 3 years and the latest one is C++26.
+If you're into C#, Python or Rust, you might wonder what it is about C++ that is "modern". Modern C++ refers to all revisions of the standard since C++11. There has been one every 3 years and the latest one is C++26 (not covered here).
 
 They brought significant changes, changes that are not trivial to learn if you grew up with C++98. Among the mind-bending concepts you will find:
 - how objects are passed by default (copy vs move semantics, r-value references)  
@@ -11,7 +11,7 @@ They brought significant changes, changes that are not trivial to learn if you g
 
 At the same time, C++ has shifted from being a general-purpose language (In the 1990's you would pick C++ MFC to build Enterprise UX) towards specialising in low-latency use cases: high-end gaming, avionics, high-frequency trading. 
 
-As a general-purpose langage, C++ is a dinosaur. As a specialised tool, it is cutting edge.
+As a general-purpose langage, C++ is a dinosaur. As a highly specialised tool, it's cutting edge.
  
 
 
@@ -26,7 +26,7 @@ timeline
  2026: C++26 - Next-Gen (reflection, contracts, safety)
 ```
 
-New features make C++ faster, more explicit, and (sometimes) safer. Modern C++ is still as close to the metal as you can get and yes, **you can still shoot yourself in the foot even if you are careful**. 
+New features make C++ faster, more explicit, and (sometimes) safer. Modern C++ is still as close to the metal as you can get and yes, **you can still shoot yourself in the foot even if you're careful**. 
 
 This document is a quick overview of the new features, **five** of which have been arbitrarily picked for each reversion of the standard. 
 
@@ -305,23 +305,7 @@ This document is a quick overview of the new features, **five** of which have be
 
 ---
 
-## C++26 (2026)
 
-1. **Compile-time Reflection** – *Purpose:* Fully introspect program structure (`class`, `functions`, etc.) at compile time using `^^`, `std::meta::info`, and `std::meta` utilities. Long-awaited (proposed since ~2008).  
-   *Use-case:* Enables generation of boilerplate (e.g. serialization, interface definitions) and powerful metaprogramming without external tools. Expected to fundamentally change how generic code is written.
-
-2. **Memory-safety defaults** – *Purpose:* Make undefined behaviors safer by default (e.g. less UB for uninitialized reads and standardized library hardening for many bounded operations). Aims to catch bugs (bounds, uninit) at runtime or compile-time.  
-   *Use-case:* Improves safety for all C++ codebases without rewriting (just recompile). May incur slight performance/runtime overhead in debug modes.
-
-3. **Contracts** (`pre`/`post`, `contract_assert`) – *Purpose:* Built-in language support for function contracts (preconditions/postconditions). Adds explicit annotations for assertions. Note: the exact syntax is still being finalised for the standard.  
-   *Use-case:* Facilitates defensive programming (preconditions and postconditions on function boundaries). If widely adopted, can catch logical errors early in development.
-
-4. **Unified Concurrency/Executors** – *Purpose:* Standard async/task framework (executors, unified API for threads and parallel algorithms). Builds a common foundation for concurrency.  
-   *Use-case:* Makes it easier to write portable parallel code (e.g. offload tasks to thread pools or GPUs with a standard API).
-
-5. **(Other notes)**: C++26 also includes many `constexpr` enhancements (virtual calls, exceptions in `constexpr`, etc.) and further library additions. These improve compile-time flexibility and debugging.
-
----
 
 # Summary Table
 
@@ -352,8 +336,4 @@ This document is a quick overview of the new features, **five** of which have be
 | | `std::mdspan` | Native multi-D array views (n-dim indexing) |
 | | `if consteval` | Compile-time-only branch (refines constexpr) |
 | | Deducing `this` | Generic member functions (auto `this`) |
-| **C++26** *(anticipated)* | Reflection | Introspection at compile-time (metaprogramming) |
-| | Memory safety | Bounds checks & init defaults (safer code) |
-| | Contracts | Built-in pre/post conditions (assertions) |
-| | Concurrency (Executors) | Standard async/executors (tasks API) |
-| | ... | (Others like constexpr virtual, improved libraries) |
+
