@@ -1,7 +1,7 @@
 # Modern C++ - Top 5 features for each version
 
 
-If you're into C#, Python or Rust, you might wonder what it is about C++ that is "modern". Modern C++ refers to all revisions of the standard since C++11. There has been one every 3 years and the latest one is C++26 (not covered here).
+If you're into C#, Python or Rust, you might wonder what it is about C++ that is "modern". Modern C++ refers to all revisions of the standard since C++11. There has been one every 3 years and the next one is C++26 (not covered here).
 
 They brought significant changes, changes that are not trivial to learn if you grew up with C++98. Among the mind-bending concepts you will find:
 - how objects are passed by default (copy vs move semantics, r-value references)  
@@ -11,7 +11,7 @@ They brought significant changes, changes that are not trivial to learn if you g
 
 At the same time, C++ has shifted from being a general-purpose language (In the 1990's you would pick C++ MFC to build Enterprise UX) towards specialising in low-latency use cases: high-end gaming, avionics, high-frequency trading. 
 
-As a general-purpose langage, C++ is a dinosaur. As a highly specialised tool, it's cutting edge.
+As a general-purpose language, C++ is a dinosaur. As a highly specialised tool, it's cutting edge.
  
 
 
@@ -28,21 +28,21 @@ timeline
 
 New features make C++ faster, more explicit, and (sometimes) safer. Modern C++ is still as close to the metal as you can get and yes, **you can still shoot yourself in the foot even if you're careful**. 
 
-This document is a quick overview of the new features, **five** of which have been arbitrarily picked for each reversion of the standard. 
+This document is a quick overview of the new features, **five** of which have been arbitrarily picked for each revision of the standard. 
 
 
 ---
 
 ## C++11 (2011)
 
-1. **Move semantics** (`std::move`) – *Purpose:* Eliminate unnecessary copies for performance. `std::move` permits moving by casting to an rvalue, enabling efficient transfer of resources. 
+1. **Move semantics** (`std::move`) – *Purpose:* Eliminate unnecessary copies for performance, enabling efficient transfer of resources. 
    ```cpp
    std::string a = "hello";
    std::string b = std::move(a); // b takes ownership; a is valid but its value is unspecified
    ``` 
    *Use-case:* Critical in high-performance code (STL containers, large objects) to avoid deep copies; requires care when using moved-from objects.
 
-2. **`std::unique_ptr` (and `std::shared_ptr`)** – *Purpose:* Modern smart pointers for automatic memory management. `unique_ptr` (introduced in C++11) makes ownership explicit and RAII-based, preventing leaks. 
+2. **`std::unique_ptr`** – *Purpose:* Modern smart pointers for automatic memory management. `unique_ptr` (introduced in C++11) makes ownership explicit and RAII-based, preventing leaks. 
    ```cpp
    #include <memory>
 
@@ -52,7 +52,7 @@ This document is a quick overview of the new features, **five** of which have be
 
    std::unique_ptr<MyClass> p(new MyClass(10)); 
    ``` 
-   *Use-case:* Use instead of raw `new`; essential in modern C++ projects (e.g. resource management, container elements). Slight overhead for `shared_ptr`, but `unique_ptr` is zero-cost.
+   *Use-case:* Use instead of raw `new`; essential in modern C++ projects (e.g. resource management, container elements). 
 
 3. **`auto` type deduction** – *Purpose:* Remove repetitive type annotations. Developers love that `auto` "tracks" the right type if the initializer changes, reducing visual clutter. 
    ```cpp
@@ -98,7 +98,7 @@ This document is a quick overview of the new features, **five** of which have be
    }
    constexpr int f6 = factorial(6); // computed at compile-time
    ``` 
-   *Use-case:* Useful in performance-critical code to compute values at compile time (e.g. lookup tables). Requires `constexpr` context to trigger.
+   *Use-case:* Useful in performance-critical code to compute values at compile time (e.g. lookup tables). 
 
 3. **Return-type deduction (`auto` function return)** – *Purpose:* Functions can omit the return type (use `auto`) and let the compiler deduce it from the return expression. 
    ```cpp
@@ -154,7 +154,7 @@ This document is a quick overview of the new features, **five** of which have be
        return a/b;
    }
    ``` 
-   *Use-case:* Common in functions that may fail; forces callers to check, improving safety (trade-off: slight overhead vs raw pointers).
+   *Use-case:* Useful in functions that may fail.
 
 4. **`std::variant`** – *Purpose:* Safe union type (holds one of several types). Ideal for functions or APIs with different return types or for a tagged union pattern (like Boost.Variant). 
    ```cpp
@@ -162,7 +162,7 @@ This document is a quick overview of the new features, **five** of which have be
    v = 10;
    v = "ten"; // now holds string
    ``` 
-   *Use-case:* Useful in interpreters, serializers, or any code requiring polymorphic value containers. Requires visitor pattern to extract, which is the main complexity.
+   *Use-case:* Useful in interpreters, serializers, or any code requiring polymorphic value containers.
 
 5. **Structured bindings** (`auto [a,b] = …`) – *Purpose:* Unpack tuples, pairs, or structs into separate variables by name. Improves readability by eliminating manual `get<>()` or `.first/.second`. 
    ```cpp
@@ -188,7 +188,7 @@ This document is a quick overview of the new features, **five** of which have be
    ``` 
    *Use-case:* Printing and logging become clearer. Many developers use `{fmt}` library similarly; having it in the standard removes an external dependency.
 
-3. **Ranges Library** – *Purpose:* Provides views, range adaptors, and range-based algorithms (in `<ranges>`). Enables pipelined STL algorithms and filters (functional style) without extra loops. 
+3. **Ranges Library** – *Purpose:* Provides views, range adaptors, and range-based algorithms. Enables pipelined STL algorithms and filters (functional style) without extra loops. 
    ```cpp
    #include <ranges>
    auto v = std::vector{1,2,3,4,5};
@@ -247,7 +247,7 @@ This document is a quick overview of the new features, **five** of which have be
        std::cout << add(2, 3);
    }
    ``` 
-   *Use-case:* Adopted in large codebases to reduce build times. (Trade-off: requires toolchain support; migration from headers can be complex.)
+   *Use-case:* Can reduce build times in large codebases but requires toolchain support. Still seen as experimental.
 
 ---
 
@@ -260,13 +260,13 @@ This document is a quick overview of the new features, **five** of which have be
        return 42;
    }
    ``` 
-   *Use-case:* Common in parsing or embedded code where throwing is undesirable. Forces explicit error handling via `.has_value()` / `.error()`. (Note: mixing with exceptions can be tricky.)
+   *Use-case:* Common in parsing or embedded code where throwing is undesirable. Enables explicit error handling via `.has_value()` / `.error()`. 
 
 2. **`std::print`/`std::println`** – *Purpose:* C++23 addition for built-in printing using `std::format`-style `{}` replacement fields. Simplifies console output with type safety. 
    ```cpp
    std::print("Hello, {}!\n", "world");
    ``` 
-   *Use-case:* Makes I/O concise (replacing cumbersome `<iostream>` syntax). Many devs welcome it as it parallels `fmt::print`. (Trade-off: unlike `fmt`, standard version is frozen; but portable.)
+   *Use-case:* Makes I/O concise (replacing cumbersome `<iostream>` syntax). Many devs welcome it as it parallels `fmt::print`. 
 
 3. **`std::mdspan`** (multi-dimensional array view) – *Purpose:* Provides a view (non-owning) of multi-dimensional arrays/matrices, with native support for `operator[]` taking multiple indices. 
    ```cpp
@@ -279,9 +279,9 @@ This document is a quick overview of the new features, **five** of which have be
 
    double x = m[1, 2]; // 2D indexing
    ``` 
-   *Use-case:* Crucial for numeric and scientific computing where multi-dimensional data is common. (Helps avoid nested loops with manual indexing, minimal overhead.)
+   *Use-case:* Crucial for numeric and scientific computing where manual multi-dimensional data arithmetic is error-prone.
 
-4. **`if consteval`** – *Purpose:* A new keyword for compile-time-only branches. Useful when a function needs different code paths at compile-time vs run-time. 
+4. **`if consteval`** – *Purpose:* Enables compile-time-only branches. Useful when a function needs different code paths at compile-time vs run-time. 
    ```cpp
    constexpr int foo(int n) {
        if consteval {
@@ -301,7 +301,6 @@ This document is a quick overview of the new features, **five** of which have be
        }
    };
    ``` 
-   *Use-case:* Useful for library authors writing CRTP or for generic `this` usage. (Minor feature, good for reducing `&` qualifiers, some see it as niche.)
 
 ---
 
@@ -323,13 +322,13 @@ This document is a quick overview of the new features, **five** of which have be
 | | `decltype(auto)` | Exact return-type forwarding (incl. references) |
 | **C++17** | `std::string_view` | Zero-copy string handling (views, substrings) |
 | | `if constexpr` | Compile-time branching in templates |
-| | `std::optional` | Explicit "maybe" values (no nulls) |
+| | `std::optional` | Expresses value or absence |
 | | `std::variant` | Type-safe union (flexible data type) |
 | | Structured bindings | Unpack tuples/structs succinctly |
 | **C++20** | Concepts | Constrained templates (readability, early errors) |
-| | `std::format` | Modern formatting (replacement for printf/iostream) |
+| | `std::format` | Modern formatting |
 | | Ranges | Composable algorithms (views + pipelines) |
-| | Coroutines | Async/generator support (simpler async code) |
+| | Coroutines | Async/generator language support  |
 | | Modules | Faster builds & encapsulation (modernize includes) |
 | **C++23** | `std::expected` | Explicit error-return (monadic error handling) |
 | | `std::print/println` | Convenient formatted I/O in core (like fmt) |
