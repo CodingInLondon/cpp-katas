@@ -1,5 +1,15 @@
 # Modern C++ - Top 5 features for each version
 
+```mermaid
+timeline
+ title C++ Standards Evolution
+ 2011: C++11 - Modernization (auto, lambda, smart pointers)
+ 2014: C++14 - Refinement (generic lambdas, make_unique, relaxed constexpr)
+ 2017: C++17 - Simplification (structured bindings, if constexpr)
+ 2020: C++20 - Big Leaps (concepts, ranges, coroutines, modules)
+ 2023: C++23 - Polishing (std::expected, std::print/println, mdspan)
+ 2026: C++26 - Next-Gen (reflection, contracts, safety)
+```
 
 If you're into C#, Python or Rust, you might wonder what it is about C++ that is "modern". Modern C++ refers to all revisions of the standard since C++11. There has been one every 3 years and the next one is C++26 (not covered here).
 
@@ -12,19 +22,6 @@ They brought significant changes, changes that are not trivial to learn if you g
 At the same time, C++ has shifted from being a general-purpose language (In the 1990's you would pick C++ MFC to build Enterprise UX) towards specialising in low-latency use cases: high-end gaming, avionics, high-frequency trading. 
 
 As a general-purpose language, C++ is a dinosaur. As a highly specialised tool, it's cutting edge.
- 
-
-
-```mermaid
-timeline
- title C++ Standards Evolution
- 2011: C++11 - Modernization (auto, lambda, smart pointers)
- 2014: C++14 - Refinement (generic lambdas, make_unique, relaxed constexpr)
- 2017: C++17 - Simplification (structured bindings, if constexpr)
- 2020: C++20 - Big Leaps (concepts, ranges, coroutines, modules)
- 2023: C++23 - Polishing (std::expected, std::print/println, mdspan)
- 2026: C++26 - Next-Gen (reflection, contracts, safety)
-```
 
 New features make C++ faster, more explicit, and (sometimes) safer. Modern C++ is still as close to the metal as you can get and yes, **you can still shoot yourself in the foot even if you're careful**. 
 
