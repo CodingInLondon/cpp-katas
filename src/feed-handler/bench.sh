@@ -22,7 +22,8 @@
 #   FILTER          regex of benchmarks to run (default: all with --run-only; for a
 #                   comparison, path|corpus, plus percall on x86-64)
 #   NOISE           changes below this many percent are not reported (default: 5)
-#   CORE            CPU core to pin to (default: the last one)
+#   CORE            CPU core to pin to (default: the isolated core if the kernel
+#                   has one, otherwise the last core)
 #   XCXX, XMARCH    cross-compiler and target CPU for --cross
 #                   (default: x86_64-linux-gnu-g++-14, ivybridge)
 set -euo pipefail
@@ -35,7 +36,15 @@ REL="${SRC#"$ROOT"/}"
 CXX="${CXX:-g++-14}"
 CXXFLAGS="${CXXFLAGS:--O2 -march=native -DNDEBUG}"
 MIN_TIME="${MIN_TIME:-0.1s}"
-CORE="${CORE:-$(($(nproc) - 1))}"
+if [ -z "${CORE:-}" ]; then
+    # Prefer a core set aside with isolcpus= (the last one if there are several).
+    ISOLATED="$(cat /sys/devices/system/cpu/isolated 2>/dev/null || true)"
+    if [ -n "$ISOLATED" ]; then
+        CORE="${ISOLATED##*[,-]}"
+    else
+        CORE="$(($(nproc) - 1))"
+    fi
+fi
 
 mkdir -p "$BUILD"
 
