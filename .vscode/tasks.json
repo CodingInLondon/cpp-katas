@@ -14,6 +14,7 @@
                 "-std=c++23",
                 "-Wall",
                 "-Wextra",
+                "-Wshadow",
                 "-g",
                 "${file}",
                 "-o",
@@ -32,7 +33,7 @@
         {
             "type": "shell",
             "label": "rolling-sum: regression test",
-            "command": "case \"${fileBasename}\" in rolling-sum*|tick.hpp|tick-generator.hpp) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O2 -Wall -Wextra \"${workspaceFolder}/src/feed-handler/rolling-sum-regression-test.cpp\" -o \"${workspaceFolder}/build/rolling-sum-regression-test\" && \"${workspaceFolder}/build/rolling-sum-regression-test\" ;; esac",
+            "command": "case \"${fileBasename}\" in rolling-sum*|tick.hpp|tick-generator.hpp) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O2 -Wall -Wextra -Wshadow \"${workspaceFolder}/src/feed-handler/rolling-sum-regression-test.cpp\" -o \"${workspaceFolder}/build/rolling-sum-regression-test\" && \"${workspaceFolder}/build/rolling-sum-regression-test\" ;; esac",
             "options": {
                 "cwd": "${workspaceFolder}/src/feed-handler"
             },
@@ -46,7 +47,7 @@
         {
             "type": "shell",
             "label": "build active file (skip headers)",
-            "command": "case \"${fileExtname}\" in .h|.hpp) echo \"Header file: nothing to compile on its own.\" ;; *) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -Wall -Wextra -g \"${file}\" -o \"${workspaceFolder}/build/${fileBasenameNoExtension}\" ;; esac",
+            "command": "case \"${fileExtname}\" in .h|.hpp) echo \"Header file: nothing to compile on its own.\" ;; *) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -Wall -Wextra -Wshadow -g \"${file}\" -o \"${workspaceFolder}/build/${fileBasenameNoExtension}\" ;; esac",
             "options": {
                 "cwd": "${fileDirname}"
             },
