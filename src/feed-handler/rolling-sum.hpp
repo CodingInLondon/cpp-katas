@@ -24,30 +24,26 @@ class RollingSum{
     // Called by feed handler for every tick
     void on_tick(const Tick& tick){
 
-        //Is it a new bucket?
-        std::int64_t current_bucket = tick.ts_ns / bucketsizens;
+        if ( tick.ts_ns < _bucket_start )  // detect late ticks
+            return; // drop it
 
-        if (current_bucket < _last_bucket) // late tick - drop it
-            return; // we will lose this tick's contribution in the sum
+        if ( (tick.ts_ns - _bucket_start) >= bucketsizens) { // Timestamp must be in new bucket
+            std::int64_t current_bucket = tick.ts_ns / bucketsizens;    
 
-        if (current_bucket != _last_bucket){
             // This is a new bucket
-            // expire all buckets since the last one.
+            _current_bucket_index = current_bucket%nbuckets;
+            _bucket_start = current_bucket*bucketsizens;
 
+            // expire all buckets since the last one.
             if ( (current_bucket - _last_bucket) > static_cast<std::int64_t>(nbuckets)){
                 //Long silence
 
                 //Reset the bucket buffer and the total
                 _total_vol = 0;
-                // for(std::size_t i = 0 ; i< nbuckets; ++i){
-                //     _buffer[i].running_total_vol = 0;
-                // }
                 _buffer.fill({});
 
             }
             else{
-
-                // std::size_t current_bucket_index = current_bucket % nbuckets;
 
                 for(auto i = _last_bucket+1 ; i <= current_bucket ; i++){
                     auto& bucket = _buffer[i%nbuckets]; // wrap around
@@ -59,12 +55,13 @@ class RollingSum{
                     bucket.running_total_vol = 0;
                 }
             }
+
+            _last_bucket = current_bucket;            
         }
 
-        _buffer[current_bucket%nbuckets].running_total_vol += tick.qty;
+        _buffer[_current_bucket_index].running_total_vol += tick.qty;
         _total_vol += tick.qty;
 
-        _last_bucket = current_bucket;
     }
 
     // read the sum. Called by a telemetry thread
@@ -82,7 +79,13 @@ class RollingSum{
 
     std::int64_t _last_bucket{0};
 
-    // Fixed-size array, determines the window size. Window (ns) < nbuckets * bucketsizens
+    // Cached index of the current bucket
+    std::size_t _current_bucket_index{0};
+
+    // Cached bucket start
+    std::int64_t _bucket_start{0};
+
+    // Fixed-size array, determines the window size. 
     std::array<Bucket, nbuckets> _buffer;
 
 };
