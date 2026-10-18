@@ -5,7 +5,7 @@
 // Reproducible across platforms: only the engine is used, never a
 // std::uniform_real_distribution, whose output is implementation defined.
 
-#include "tick.hpp"
+#include "../tick.hpp"
 
 #include <cmath>
 #include <cstdint>

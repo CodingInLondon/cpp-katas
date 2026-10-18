@@ -20,7 +20,7 @@
 // If 3 fails but 2 passes, RollingSum and the reference changed together: the
 // window rules were changed on purpose and the hashes need re-freezing.
 
-#include "rolling-sum.hpp"
+#include "../rolling-sum.hpp"
 #include "tick-generator.hpp"
 
 #include <cstdint>

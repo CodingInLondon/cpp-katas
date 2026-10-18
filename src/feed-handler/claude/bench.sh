@@ -115,10 +115,11 @@ if [ -z "${FILTER:-}" ]; then
 fi
 
 # Baseline: the sources at REF, with today's benchmark and tick generator on top.
+# Archive the parent: the headers under test live there, and this directory may not exist at REF.
 BASE_SRC="$BUILD/bench-baseline-src"
 rm -rf "$BASE_SRC"
-mkdir -p "$BASE_SRC"
-git -C "$ROOT" archive "$REF" "$REL" | tar -x -C "$BASE_SRC"
+mkdir -p "$BASE_SRC/$REL"
+git -C "$ROOT" archive "$REF" "$(dirname "$REL")" | tar -x -C "$BASE_SRC"
 cp "$SRC/bench-aggregates.cpp" "$SRC/tick-generator.hpp" "$BASE_SRC/$REL/"
 
 echo "Building baseline ($REF) and working tree..."

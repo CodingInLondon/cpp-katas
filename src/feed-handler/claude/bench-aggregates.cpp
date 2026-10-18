@@ -24,7 +24,7 @@
 
 #include <benchmark/benchmark.h>
 
-#include "rolling-sum.hpp"
+#include "../rolling-sum.hpp"
 #include "tick-generator.hpp"
 
 #include <algorithm>
