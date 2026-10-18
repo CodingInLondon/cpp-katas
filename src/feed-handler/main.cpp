@@ -1,5 +1,5 @@
 #include "telemetry.hpp"
-#include "itch-parser.hpp"
+#include "claude/itch-parser.hpp"
 #include "rolling-sum.hpp"
 
 #include <thread>
