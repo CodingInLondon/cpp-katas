@@ -2,6 +2,7 @@
 #include "claude/itch-parser.hpp"
 #include "rolling-sum.hpp"
 #include "spsc.hpp"
+#include "book.hpp"
 
 #include <thread>
 #include <print>
@@ -27,7 +28,8 @@ class TickHandler{
     private:
 
     RollingSum<30, 1000000000> _rolling_sum;
-    RingBuffer<Tick, 64> _ring_buffer;
+    RingBuffer<Tick, 65536> _ring_buffer;
+    Book<65536> _book;
 
     TelemetryCounters& _counters;
 };
