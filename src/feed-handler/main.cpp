@@ -1,7 +1,7 @@
 #include "telemetry.hpp"
 #include "claude/itch-parser.hpp"
 #include "rolling-sum.hpp"
-#include "spsc.hpp"
+//#include "spsc.hpp"
 #include "book.hpp"
 
 #include <thread>
@@ -28,7 +28,7 @@ class TickHandler{
     private:
 
     RollingSum<30, 1000000000> _rolling_sum;
-    RingBuffer<Tick, 65536> _ring_buffer;
+    //RingBuffer<Tick, 65536> _ring_buffer;
     Book<65536> _book;
 
     TelemetryCounters& _counters;
@@ -40,7 +40,10 @@ int main(){
     TelemetryCounters counters;
     TickHandler handler(counters);
 
-    ItchParser<TickHandler&> parser(handler, {.port = 12345});
+    ItchParser<TickHandler&> parser(handler, {
+        .group = "239.1.1.1",
+        .interface_ip = "10.211.55.5",
+        .port = 12345});
 
     Telemetry telemetry(counters);
     std::thread telemetry_thread(&Telemetry::run, &telemetry);
