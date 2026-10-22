@@ -1,6 +1,7 @@
 #include "telemetry.hpp"
 #include "claude/itch-parser.hpp"
 #include "rolling-sum.hpp"
+#include "rolling-max.hpp"
 //#include "spsc.hpp"
 #include "book.hpp"
 
@@ -28,6 +29,7 @@ class TickHandler{
     private:
 
     RollingSum<30, 1000000000> _rolling_sum;
+    RollingMax<30000000000> _rolling_max;
     //RingBuffer<Tick, 65536> _ring_buffer;
     Book<65536> _book;
 
