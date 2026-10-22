@@ -18,6 +18,7 @@ class RingBuffer{
 
     std::array<T, buckets> _ringbuffer{};
 
+    // TODO: benchmark with and without alignas(64)
     alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> _head{0}; //next slot to be written to  by producer
     alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> _tail{0}; //next slot to be read by consumer
 
@@ -28,6 +29,7 @@ class RingBuffer{
     // owns the head
     bool push(const T& payload){
 
+        // TODO: benchmark between seq_cst and relaxed / load/acquire
         std::size_t next_head = (_head.load(std::memory_order_relaxed) + 1 ) % buckets;
 
         if (next_head == _tail.load(std::memory_order_acquire)) // full
