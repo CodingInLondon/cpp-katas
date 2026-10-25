@@ -2,7 +2,8 @@
 #include "claude/itch-parser.hpp"
 #include "rolling-sum.hpp"
 #include "rolling-max.hpp"
-//#include "spsc.hpp"
+// #include "pool.hpp"
+#include "spsc.hpp"
 #include "book.hpp"
 
 #include <thread>
@@ -14,6 +15,8 @@ class TickHandler{
     public:
 
     TickHandler(TelemetryCounters& counters):_counters(counters){
+        // auto t = pool.allocate();
+        // pool.allocate(t);
 
     }
 
@@ -30,8 +33,9 @@ class TickHandler{
 
     RollingSum<30, 1000000000> _rolling_sum;
     RollingMax<30000000000> _rolling_max;
-    //RingBuffer<Tick, 65536> _ring_buffer;
+    RingBuffer<Tick, 65536> _ring_buffer;
     Book<65536> _book;
+    // Pool<Tick, 65536> pool;
 
     TelemetryCounters& _counters;
 };
@@ -57,6 +61,7 @@ int main(){
 
 
     telemetry_thread.join();
+
 
  
     return 0;
