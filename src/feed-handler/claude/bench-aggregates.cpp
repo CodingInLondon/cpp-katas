@@ -25,6 +25,7 @@
 #include <benchmark/benchmark.h>
 
 #include "../rolling-sum.hpp"
+#include "cycle-clock.hpp"
 #include "tick-generator.hpp"
 
 #include <algorithm>
@@ -33,10 +34,6 @@
 #include <cstdio>
 #include <numeric>
 #include <vector>
-
-#if defined(__x86_64__)
-#include <x86intrin.h>
-#endif
 
 // ---------------------------------------------------------------------------
 // The aggregate under test. Anything with these template parameters,
@@ -126,104 +123,7 @@ static void BM_Corpus(benchmark::State& state) {
 // ---------------------------------------------------------------------------
 // Per-call timing.
 // ---------------------------------------------------------------------------
-// Cycle counter. x86: lfence/rdtsc at the start and rdtscp/lfence at the end,
-// so the timed region cannot overlap the code around it. NOTE: the x86 branch
-// has only been cross-compiled and run under emulation (./bench.sh --cross);
-// its timings have not yet been checked on real Intel hardware.
-#if defined(__x86_64__)
-static inline std::uint64_t clock_begin() { _mm_lfence(); return __rdtsc(); }
-static inline std::uint64_t clock_end() {
-    unsigned aux;
-    const std::uint64_t t = __rdtscp(&aux);
-    _mm_lfence();
-    return t;
-}
-#elif defined(__aarch64__)
-static inline std::uint64_t clock_begin() {
-    std::uint64_t v;
-    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(v));
-    return v;
-}
-static inline std::uint64_t clock_end() { return clock_begin(); }
-#else
-static inline std::uint64_t clock_begin() {
-    return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
-}
-static inline std::uint64_t clock_end() { return clock_begin(); }
-#endif
-
-struct ClockInfo {
-    double ns_per_count;         // length of one counter unit
-    double step_ns;              // smallest step the counter actually advances by
-    std::uint64_t overhead;      // counts measured around an empty region (median)
-};
-
-static const ClockInfo& clock_info() {
-    static const ClockInfo info = [] {
-        ClockInfo ci{};
-
-        // Counter units per nanosecond, against steady_clock over 50 ms.
-        const auto w0 = std::chrono::steady_clock::now();
-        const std::uint64_t c0 = clock_end();
-        auto w1 = w0;
-        while (w1 - w0 < std::chrono::milliseconds(50)) w1 = std::chrono::steady_clock::now();
-        const std::uint64_t c1 = clock_end();
-        ci.ns_per_count = static_cast<double>(std::chrono::nanoseconds(w1 - w0).count()) /
-                          static_cast<double>(c1 - c0);
-
-        // Step: greatest common divisor of the differences between successive reads.
-        // Overhead: median of begin/end pairs with nothing in between.
-        constexpr std::size_t kSamples = 200'000;
-        std::vector<std::uint64_t> empty(kSamples);
-        std::uint64_t step = 0, prev = clock_end();
-        for (std::size_t i = 0; i < kSamples; ++i) {
-            const std::uint64_t b = clock_begin();
-            const std::uint64_t e = clock_end();
-            empty[i] = e - b;
-            step = std::gcd(step, e - prev);
-            prev = e;
-        }
-        std::nth_element(empty.begin(), empty.begin() + kSamples / 2, empty.end());
-        ci.overhead = empty[kSamples / 2];
-        ci.step_ns = static_cast<double>(step ? step : 1) * ci.ns_per_count;
-        return ci;
-    }();
-    return info;
-}
-
-// Exact counts for short durations, a list for the few long ones.
-class Histogram {
-public:
-    void add(std::uint64_t counts) {
-        if (counts < kLinear) ++linear_[counts];
-        else long_.push_back(counts);
-        ++total_;
-    }
-
-    // Smallest duration d such that at least a fraction q of the samples are <= d.
-    std::uint64_t quantile(double q) {
-        if (total_ == 0) return 0;
-        std::sort(long_.begin(), long_.end());
-        const auto want = std::max<std::uint64_t>(
-            1, static_cast<std::uint64_t>(q * static_cast<double>(total_)));
-        std::uint64_t seen = 0;
-        for (std::uint64_t c = 0; c < kLinear; ++c) {
-            seen += linear_[c];
-            if (seen >= want) return c;
-        }
-        for (std::uint64_t c : long_)
-            if (++seen >= want) return c;
-        return long_.back();
-    }
-
-    std::uint64_t max() { return quantile(1.0); }
-
-private:
-    static constexpr std::uint64_t kLinear = 8192;
-    std::vector<std::uint64_t> linear_ = std::vector<std::uint64_t>(kLinear, 0);
-    std::vector<std::uint64_t> long_;
-    std::uint64_t total_ = 0;
-};
+// Clock and histogram: see cycle-clock.hpp.
 
 template <std::size_t NBuckets, std::int64_t BucketNs>
 static void BM_PerCall(benchmark::State& state) {
