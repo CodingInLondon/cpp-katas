@@ -16,3 +16,15 @@ add_executable(feed-handler main.cpp)
 target_compile_options(feed-handler PRIVATE -Wall -Wextra)
 target_link_libraries(feed-handler PRIVATE Threads::Threads)
 
+enable_testing()
+
+add_executable(spsc-regression-test claude/spsc-regression-test.cpp)
+target_compile_options(spsc-regression-test PRIVATE -Wall -Wextra -Wshadow)
+add_test(NAME spsc-regression COMMAND spsc-regression-test)
+
+#Run it on every build. A failing check fails the build.
+add_custom_command(TARGET spsc-regression-test POST_BUILD
+   COMMAND spsc-regression-test
+   COMMENT "Running SPSC regression test")
+
+   
