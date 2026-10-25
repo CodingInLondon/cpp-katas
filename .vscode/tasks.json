@@ -46,6 +46,20 @@
         },
         {
             "type": "shell",
+            "label": "spsc: regression test",
+            "command": "case \"${fileBasename}\" in main.cpp|spsc*) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O2 -Wall -Wextra -Wshadow \"${workspaceFolder}/src/feed-handler/claude/spsc-regression-test.cpp\" -o \"${workspaceFolder}/build/spsc-regression-test\" && \"${workspaceFolder}/build/spsc-regression-test\" ;; esac",
+            "options": {
+                "cwd": "${workspaceFolder}/src/feed-handler"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+            "detail": "Builds and runs the SPSC ring buffer regression test when the active file is main.cpp or spsc*.",
+            "dependsOn": "mkdir build"
+        },
+        {
+            "type": "shell",
             "label": "build active file (skip headers)",
             "command": "case \"${fileExtname}\" in .h|.hpp) echo \"Header file: nothing to compile on its own.\" ;; *) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -Wall -Wextra -Wshadow -g \"${file}\" -o \"${workspaceFolder}/build/${fileBasenameNoExtension}\" ;; esac",
             "options": {
@@ -61,7 +75,8 @@
             "label": "build + regression",
             "dependsOn": [
                 "build active file (skip headers)",
-                "rolling-sum: regression test"
+                "rolling-sum: regression test",
+                "spsc: regression test"
             ],
             "dependsOrder": "sequence",
             "group": {
