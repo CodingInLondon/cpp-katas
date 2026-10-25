@@ -60,6 +60,20 @@
         },
         {
             "type": "shell",
+            "label": "spsc: stress test (tsan)",
+            "command": "/usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O1 -g -fsanitize=thread -Wall -Wextra -Wshadow \"${workspaceFolder}/src/feed-handler/claude/spsc-stress-test.cpp\" -o \"${workspaceFolder}/build/spsc-stress-test\" && setarch \"$(uname -m)\" -R \"${workspaceFolder}/build/spsc-stress-test\"",
+            "options": {
+                "cwd": "${workspaceFolder}/src/feed-handler"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+            "detail": "Two-thread RingBuffer stress test under ThreadSanitizer. setarch -R: TSan cannot start with this kernel's ASLR. Not part of Ctrl+Shift+B.",
+            "dependsOn": "mkdir build"
+        },
+        {
+            "type": "shell",
             "label": "build active file (skip headers)",
             "command": "case \"${fileExtname}\" in .h|.hpp) echo \"Header file: nothing to compile on its own.\" ;; *) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -Wall -Wextra -Wshadow -g \"${file}\" -o \"${workspaceFolder}/build/${fileBasenameNoExtension}\" ;; esac",
             "options": {
