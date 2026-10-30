@@ -57,6 +57,7 @@ class RollingMax{
 
     private:
 
+    // TODO: make this a pre-allocated deque (with PMR) to avoid allocation in the hot path
     std::deque<Tick> _slots;
 
 
