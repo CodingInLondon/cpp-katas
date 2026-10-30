@@ -46,6 +46,20 @@
         },
         {
             "type": "shell",
+            "label": "rolling-max: regression test",
+            "command": "case \"${fileBasename}\" in main.cpp|rolling-max*|tick.hpp|tick-generator.hpp) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O2 -Wall -Wextra -Wshadow \"${workspaceFolder}/src/feed-handler/claude/rolling-max-regression-test.cpp\" -o \"${workspaceFolder}/build/rolling-max-regression-test\" && \"${workspaceFolder}/build/rolling-max-regression-test\" ;; esac",
+            "options": {
+                "cwd": "${workspaceFolder}/src/feed-handler"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+            "detail": "Builds and runs the RollingMax regression test when the active file is main.cpp, rolling-max* or a tick header.",
+            "dependsOn": "mkdir build"
+        },
+        {
+            "type": "shell",
             "label": "spsc: regression test",
             "command": "case \"${fileBasename}\" in main.cpp|spsc*) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O2 -Wall -Wextra -Wshadow \"${workspaceFolder}/src/feed-handler/claude/spsc-regression-test.cpp\" -o \"${workspaceFolder}/build/spsc-regression-test\" && \"${workspaceFolder}/build/spsc-regression-test\" ;; esac",
             "options": {
@@ -90,6 +104,7 @@
             "dependsOn": [
                 "build active file (skip headers)",
                 "rolling-sum: regression test",
+                "rolling-max: regression test",
                 "spsc: regression test"
             ],
             "dependsOrder": "sequence",
