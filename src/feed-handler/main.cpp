@@ -2,9 +2,9 @@
 #include "claude/itch-parser.hpp"
 #include "rolling-sum.hpp"
 #include "rolling-max.hpp"
-// #include "pool.hpp"
+#include "pool.hpp"
 #include "spsc.hpp"
-#include "book.hpp"
+//#include "book.hpp"
 
 #include <thread>
 #include <print>
@@ -23,6 +23,7 @@ class TickHandler{
     void on_tick(const Tick& tick){
 
         _rolling_sum.on_tick(tick);
+        _rolling_max.on_tick(tick);
     }
 
     std::int64_t sum() const{
@@ -34,8 +35,8 @@ class TickHandler{
     RollingSum<30, 1000000000> _rolling_sum;
     RollingMax<30000000000> _rolling_max;
     RingBuffer<Tick, 65536> _ring_buffer;
-    Book<65536> _book;
-    // Pool<Tick, 65536> pool;
+  //  Book<65536> _book;
+    Pool<Tick, 65536> pool;
 
     TelemetryCounters& _counters;
 };
@@ -52,16 +53,12 @@ int main(){
         .port = 12345});
 
     Telemetry telemetry(counters);
-    std::thread telemetry_thread(&Telemetry::run, &telemetry);
+    std::jthread telemetry_thread(&Telemetry::run, &telemetry);
 
     parser.start();
     const auto& s = parser.stats();
     std::println("packets {} messages {} ticks {} lost {} malformed {} sum {}",
              s.packets, s.messages, s.ticks, s.lost_messages, s.malformed, handler.sum());    
-
-
-    telemetry_thread.join();
-
 
  
     return 0;
