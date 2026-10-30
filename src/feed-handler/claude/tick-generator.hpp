@@ -45,7 +45,7 @@ public:
         if (price_ < 1) price_ = 1;
 
         return Tick{static_cast<std::int64_t>(now_), price_,
-                    static_cast<std::int64_t>(1 + qty_() % 1000)};
+                    static_cast<std::int64_t>(1 + qty_() % 1000), Operation::execute};
     }
 
     // Reproducible corpus, plus deliberate edge cases at known indices.
@@ -60,8 +60,8 @@ public:
             if (i == n / 4) {                       // gap longer than any window
                 g.now_ += 60'000'000'000ULL;
             } else if (i == n / 2) {                // three identical timestamps
-                v.push_back(Tick{v.back().ts_ns, v.back().price + 7, 10});
-                v.push_back(Tick{v.back().ts_ns, v.back().price - 3, 20});
+                v.push_back(Tick{v.back().ts_ns, v.back().price + 7, 10, Operation::execute});
+                v.push_back(Tick{v.back().ts_ns, v.back().price - 3, 20, Operation::execute});
             } else if (i == 3 * n / 4) {            // zero quantity
                 v.back().qty = 0;
             }

@@ -174,42 +174,42 @@ static void edge_cases() {
     {   // 4 buckets of 10 ns: boundaries, expiry, late ticks, zero quantity
         RollingSum<4, 10> s;
         EXPECT_SUM(s, 0);
-        s.on_tick({0, 1, 5});   EXPECT_SUM(s, 5);
-        s.on_tick({9, 1, 3});   EXPECT_SUM(s, 8);    // last ns of bucket 0
-        s.on_tick({10, 1, 2});  EXPECT_SUM(s, 10);   // first ns of bucket 1
-        s.on_tick({39, 1, 1});  EXPECT_SUM(s, 11);   // bucket 3, nothing expired yet
-        s.on_tick({40, 1, 1});  EXPECT_SUM(s, 4);    // bucket 4 expires bucket 0 (8)
-        s.on_tick({35, 1, 100}); EXPECT_SUM(s, 4);   // late tick (bucket 3): dropped
-        s.on_tick({41, 1, 0});  EXPECT_SUM(s, 4);    // zero quantity
-        s.on_tick({40, 1, 6});  EXPECT_SUM(s, 10);   // older timestamp, same bucket: kept
+        s.on_tick({0, 1, 5, Operation::execute});   EXPECT_SUM(s, 5);
+        s.on_tick({9, 1, 3, Operation::execute});   EXPECT_SUM(s, 8);    // last ns of bucket 0
+        s.on_tick({10, 1, 2, Operation::execute});  EXPECT_SUM(s, 10);   // first ns of bucket 1
+        s.on_tick({39, 1, 1, Operation::execute});  EXPECT_SUM(s, 11);   // bucket 3, nothing expired yet
+        s.on_tick({40, 1, 1, Operation::execute});  EXPECT_SUM(s, 4);    // bucket 4 expires bucket 0 (8)
+        s.on_tick({35, 1, 100, Operation::execute}); EXPECT_SUM(s, 4);   // late tick (bucket 3): dropped
+        s.on_tick({41, 1, 0, Operation::execute});  EXPECT_SUM(s, 4);    // zero quantity
+        s.on_tick({40, 1, 6, Operation::execute});  EXPECT_SUM(s, 10);   // older timestamp, same bucket: kept
     }
     {   // gap of nbuckets - 1 buckets: the old bucket is still inside the window
         RollingSum<4, 10> s;
-        s.on_tick({0, 1, 7});
-        s.on_tick({30, 1, 1});  EXPECT_SUM(s, 8);
+        s.on_tick({0, 1, 7, Operation::execute});
+        s.on_tick({30, 1, 1, Operation::execute});  EXPECT_SUM(s, 8);
     }
     {   // gap of exactly nbuckets buckets: the old bucket has just left
         RollingSum<4, 10> s;
-        s.on_tick({0, 1, 7});
-        s.on_tick({40, 1, 1});  EXPECT_SUM(s, 1);
+        s.on_tick({0, 1, 7, Operation::execute});
+        s.on_tick({40, 1, 1, Operation::execute});  EXPECT_SUM(s, 1);
     }
     {   // gap of nbuckets + 1 buckets: long silence
         RollingSum<4, 10> s;
-        s.on_tick({0, 1, 7});
-        s.on_tick({50, 1, 1});  EXPECT_SUM(s, 1);
+        s.on_tick({0, 1, 7, Operation::execute});
+        s.on_tick({50, 1, 1, Operation::execute});  EXPECT_SUM(s, 1);
     }
     {   // first tick far from zero
         RollingSum<4, 10> s;
         const std::int64_t far = 1'000'000'000'000'000'000;
-        s.on_tick({far, 1, 9});      EXPECT_SUM(s, 9);
-        s.on_tick({far + 10, 1, 1}); EXPECT_SUM(s, 10);
-        s.on_tick({far + 40, 1, 1}); EXPECT_SUM(s, 2);
+        s.on_tick({far, 1, 9, Operation::execute});      EXPECT_SUM(s, 9);
+        s.on_tick({far + 10, 1, 1, Operation::execute}); EXPECT_SUM(s, 10);
+        s.on_tick({far + 40, 1, 1, Operation::execute}); EXPECT_SUM(s, 2);
     }
     {   // a single bucket
         RollingSum<1, 10> s;
-        s.on_tick({0, 1, 5});   EXPECT_SUM(s, 5);
-        s.on_tick({5, 1, 1});   EXPECT_SUM(s, 6);
-        s.on_tick({10, 1, 2});  EXPECT_SUM(s, 2);
+        s.on_tick({0, 1, 5, Operation::execute});   EXPECT_SUM(s, 5);
+        s.on_tick({5, 1, 1, Operation::execute});   EXPECT_SUM(s, 6);
+        s.on_tick({10, 1, 2, Operation::execute});  EXPECT_SUM(s, 2);
     }
 
     if (g_failures == before) std::printf("ok    edge cases\n");
