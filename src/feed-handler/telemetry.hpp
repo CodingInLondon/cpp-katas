@@ -4,6 +4,9 @@
 #include <condition_variable>
 #include <chrono>
 #include <print>
+#include <thread>
+#include <stop_token>
+#include <cstdint>
 
 // Shared between telemetry thread and rolling window aggregators
 struct alignas(64) TelemetryCounters{
@@ -22,6 +25,14 @@ class Telemetry{
 
     }
 
+    Telemetry(const Telemetry& ) = delete; // because of jthread
+    Telemetry(const Telemetry&& ) = delete;
+
+    void start(){
+        _thread = std::jthread([this](std::stop_token st){ run(st);});
+
+    }
+
     void run(std::stop_token stop){
 
         constexpr auto period = std::chrono::minutes(1);
@@ -35,8 +46,8 @@ class Telemetry{
             {
                 std::unique_lock lock(m);
 
-                if (cv.wait_until(lock, stop, next, []{ return false;} ))
-                    break;  
+                cv.wait_until(lock, stop, next, []{ return false;} );
+                if (stop.stop_requested()) break;
             }
 
 
@@ -59,5 +70,7 @@ class Telemetry{
     private:
 
     TelemetryCounters& _counters;
+
+    std::jthread _thread;
 };
 

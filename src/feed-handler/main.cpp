@@ -53,7 +53,8 @@ int main(){
         .port = 12345});
 
     Telemetry telemetry(counters);
-    std::jthread telemetry_thread(&Telemetry::run, &telemetry);
+    telemetry.start();
+    // std::jthread telemetry_thread(&Telemetry::run, &telemetry);
 
     parser.start();
     const auto& s = parser.stats();
