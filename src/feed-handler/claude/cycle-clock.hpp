@@ -107,6 +107,13 @@ public:
 
     std::uint64_t max() { return quantile(1.0); }
 
+    // Allocates and maps room for n long durations, so add() neither allocates nor
+    // page-faults until there are more than n. Call before timing starts.
+    void prefault_long(std::size_t n) {
+        long_.assign(n, 0);
+        long_.clear();
+    }
+
 private:
     static constexpr std::uint64_t kLinear = 8192;
     std::vector<std::uint64_t> linear_ = std::vector<std::uint64_t>(kLinear, 0);

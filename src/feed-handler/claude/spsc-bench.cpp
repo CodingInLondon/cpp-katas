@@ -154,8 +154,13 @@ void pretouch_queue() {
     }
 }
 
+// Enough for every run so far; going over it means a reallocation on the hot path.
+constexpr std::size_t long_samples = 1 << 16;
+
 template <bool PerCall>
 struct Producer {
+    Producer() { push.prefault_long(long_samples); }
+
     Histogram push;
     std::uint64_t pushed = 0;
     std::uint64_t full = 0;
@@ -183,6 +188,12 @@ struct Producer {
 };
 
 struct Consumer {
+    Consumer() {
+        pop.prefault_long(long_samples);
+        pop_empty.prefault_long(long_samples);
+        e2e.prefault_long(long_samples);
+    }
+
     Histogram pop;
     Histogram pop_empty;
     Histogram e2e;
