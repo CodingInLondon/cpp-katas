@@ -6,8 +6,8 @@ Usage: bench-compare.py [--noise PCT] --baseline B.json [B2.json ...] --current 
 
 Prints one line per benchmark: median ns per tick before and after, the change,
 and a verdict. A change is called faster/slower only when it is larger than the
-noise threshold AND the two sets of samples differ significantly (Mann-Whitney
-U test, p < 0.01; needs scipy, otherwise the samples must not overlap).
+noise threshold AND the two sets of samples differ: they do not overlap, or a
+Mann-Whitney U test gives p < 0.01 (the test needs scipy and 4+ samples a side).
 Per-call benchmarks are compared on their percentile counters instead of time.
 """
 import argparse
@@ -52,9 +52,13 @@ def natural(name):
 
 
 def differs(old, new):
+    # Checked first: with 5 samples a side and tied values, even complete separation
+    # only reaches p = 0.0117, so the test alone would miss it.
+    if max(old) < min(new) or max(new) < min(old):
+        return True
     if mannwhitneyu is not None and len(old) >= 4 and len(new) >= 4:
         return mannwhitneyu(old, new, alternative="two-sided").pvalue < 0.01
-    return max(old) < min(new) or max(new) < min(old)
+    return False
 
 
 def main():
