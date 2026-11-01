@@ -25,6 +25,10 @@
 // A push that finds the queue full counts in "full" and is retried until it succeeds;
 // only the first attempt is in the push row, and e2e includes the wait.
 //
+// The queue lives in .bss, so its pages are not mapped until first written: without a
+// pre-touch, the first lap takes one page fault (about 2 us) every 4 KB. One push/pop lap
+// on the producer core before "ready" maps them all. Page faults during the run are printed.
+//
 // Output: --out FILE in Google Benchmark's JSON shape, so bench-compare.py reads it.
 // Exit status 3 if the run is not valid: lost or malformed packets, or the consumer
 // did not get exactly the ticks the parser pushed.
@@ -44,6 +48,7 @@
 
 #include <pthread.h>
 #include <sched.h>
+#include <sys/resource.h>
 
 #include <atomic>
 #include <cstdint>
@@ -133,6 +138,22 @@ void pin(int core, const char* who) {
     }
 }
 
+// Minor page faults taken by the calling thread so far.
+long minor_faults() {
+    rusage r{};
+    getrusage(RUSAGE_THREAD, &r);
+    return r.ru_minflt;
+}
+
+// Maps every page of the queue. Results are not checked: a queue that misbehaves here
+// is caught by the validity check at the end of the run.
+void pretouch_queue() {
+    for (std::size_t i = 0; i < SPSC_BUCKETS; i++) {
+        queue.push(Stamped{});
+        queue.pop();
+    }
+}
+
 template <bool PerCall>
 struct Producer {
     Histogram push;
@@ -169,6 +190,7 @@ struct Consumer {
     std::uint64_t empty = 0;   // polls that found nothing, counted from the first tick on
     std::uint64_t qty = 0;
     std::uint64_t last_tsc = 0;
+    long page_faults = 0;
 };
 
 template <bool PerCall>
@@ -254,16 +276,22 @@ int run(const Options& o, const ClockInfo& ck) {
                                                      .interface_ip = o.interface_ip,
                                                      .port = o.port,
                                                      .rcvbuf_bytes = o.rcvbuf_bytes});
+    pin(o.producer_core, "producer");
+    pretouch_queue();
+
     std::printf("ready\n");
     std::fflush(stdout);
 
     std::thread consumer_thread([&] {
         pin(o.consumer_core, "consumer");
+        const long faults_before = minor_faults();
         consume<PerCall>(consumer);
+        consumer.page_faults = minor_faults() - faults_before;
     });
 
-    pin(o.producer_core, "producer");
+    const long faults_before = minor_faults();
     parser.start();
+    const long producer_faults = minor_faults() - faults_before;
     done.store(true, std::memory_order_release);
     consumer_thread.join();
 
@@ -300,6 +328,8 @@ int run(const Options& o, const ClockInfo& ck) {
                 static_cast<unsigned long long>(s.ticks), static_cast<unsigned long long>(s.lost_messages),
                 static_cast<unsigned long long>(s.malformed), static_cast<unsigned long long>(producer.full),
                 static_cast<unsigned long long>(consumer.empty), mticks);
+    std::printf("minor page faults during the run: producer %ld, consumer %ld\n", producer_faults,
+                consumer.page_faults);
     std::printf("summary: messages=%llu ticks=%llu qty=%llu\n", static_cast<unsigned long long>(s.messages),
                 static_cast<unsigned long long>(consumer.popped), static_cast<unsigned long long>(consumer.qty));
 
