@@ -21,8 +21,8 @@ class RingBuffer{
     std::array<T, buckets> _ringbuffer{};
 
     // TODO: benchmark with and without alignas(64)
-    alignas(64) std::atomic<std::size_t> _head{0}; //next slot to be written to  by producer
-    alignas(64) std::atomic<std::size_t> _tail{0}; //next slot to be read by consumer
+    std::atomic<std::size_t> _head{0}; //next slot to be written to  by producer
+    std::atomic<std::size_t> _tail{0}; //next slot to be read by consumer
 
 
     public:
