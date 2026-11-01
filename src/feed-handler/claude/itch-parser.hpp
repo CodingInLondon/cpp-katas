@@ -223,7 +223,8 @@ class ItchParser{
         // timestamp: nanoseconds since midnight. price: 4 implied decimals.
         _handler.on_tick(Tick{static_cast<std::int64_t>(load_be<6>(msg + 5)),
                               static_cast<std::int64_t>(price),
-                              static_cast<std::int64_t>(qty)});
+                              static_cast<std::int64_t>(qty),
+                              Operation::execute}); // E, C, P and Q are all executions
         ++_stats.ticks;
     }
 
