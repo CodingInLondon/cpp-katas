@@ -132,8 +132,8 @@ static void two_buckets(){
 // A struct payload comes back field for field.
 static void struct_payload(){
     RingBuffer<Tick, 4> rb;
-    CHECK(rb.push(Tick{34'200'000'000'000, 1'234'500, 300, Operation::execute}));
-    CHECK(rb.push(Tick{-1, 0, 0, Operation::del}));
+    CHECK(rb.push(Tick{34'200'000'000'000, 1'234'500, 300, 0, Operation::execute}));
+    CHECK(rb.push(Tick{-1, 0, 0, 0, Operation::del}));
     auto a = rb.pop();
     CHECK(a && a->ts_ns == 34'200'000'000'000 && a->price == 1'234'500 && a->qty == 300
           && a->op == Operation::execute);

@@ -187,12 +187,14 @@ class ItchParser{
 
         std::uint64_t price = 0;
         std::uint64_t qty = 0;
+        std::uint64_t order_id = 0; // Q (cross trade) has no order reference
 
         switch ( msg[0] ){
 
             case 'E': // Order Executed: shares at 19, no price
                 if ( len < 31 ) { ++_stats.malformed; return; }
                 price = static_cast<std::uint64_t>(no_price);
+                order_id = load_be<8>(msg + 11);
                 qty = load_be<4>(msg + 19);
                 break;
 
@@ -200,12 +202,14 @@ class ItchParser{
                 if ( len < 36 ) { ++_stats.malformed; return; }
                 if ( msg[31] == 'N' )
                     return; // non-printable: already counted in a cross or trade message
+                order_id = load_be<8>(msg + 11);
                 qty = load_be<4>(msg + 19);
                 price = load_be<4>(msg + 32);
                 break;
 
             case 'P': // Trade (non-cross): shares at 20, price at 32
                 if ( len < 44 ) { ++_stats.malformed; return; }
+                order_id = load_be<8>(msg + 11);
                 qty = load_be<4>(msg + 20);
                 price = load_be<4>(msg + 32);
                 break;
@@ -224,6 +228,7 @@ class ItchParser{
         _handler.on_tick(Tick{static_cast<std::int64_t>(load_be<6>(msg + 5)),
                               static_cast<std::int64_t>(price),
                               static_cast<std::int64_t>(qty),
+                              static_cast<std::int64_t>(order_id),
                               Operation::execute}); // E, C, P and Q are all executions
         ++_stats.ticks;
     }
