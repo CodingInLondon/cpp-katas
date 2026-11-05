@@ -4,6 +4,7 @@ set(CMAKE_CXX_COMPILER g++-14)
 project(feed-handler LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -27,4 +28,14 @@ add_custom_command(TARGET spsc-regression-test POST_BUILD
    COMMAND spsc-regression-test
    COMMENT "Running SPSC regression test")
 
-   
+
+add_executable(spsc-stress-test claude/spsc-stress-test.cpp)
+target_compile_options(spsc-stress-test PRIVATE -Wall -Wextra -Wshadow -fsanitize=thread -O1 -g)
+target_link_options(spsc-stress-test PRIVATE -fsanitize=thread)
+add_test(NAME spsc-stress 
+  COMMAND setarch ${CMAKE_SYSTEM_PROCESSOR} -R $<TARGET_FILE:spsc-stress-test>)
+
+#Run it on every build. A failing check fails the build.
+# add_custom_command(TARGET spsc-stress-test POST_BUILD
+#    COMMAND spsc-stress-test
+#    COMMENT "Running SPSC stress test")
