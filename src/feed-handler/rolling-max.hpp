@@ -45,7 +45,7 @@ class RollingMax{
 
     }
 
-    // Not thread-safe. TODO: make it thread safe
+    // Called from the main thread.
     std::optional<std::int64_t> get_max() const{
 
         if (_slots.empty())

@@ -4,7 +4,7 @@
 #include "rolling-max.hpp"
 #include "pool.hpp"
 #include "spsc.hpp"
-//#include "book.hpp"
+// #include "book.hpp"
 
 #include <thread>
 #include <print>
@@ -15,28 +15,35 @@ class TickHandler{
     public:
 
     TickHandler(TelemetryCounters& counters):_counters(counters){
-        // auto t = pool.allocate();
-        // pool.allocate(t);
 
     }
 
     void on_tick(const Tick& tick){
 
+        // Calculate aggregates
         _rolling_sum.on_tick(tick);
         _rolling_max.on_tick(tick);
+
+        // Store aggregates
+        _counters.rolling_sum.store(_rolling_sum.get_sum(), std::memory_order_relaxed);
+        if (auto max = _rolling_max.get_max())
+            _counters.rolling_max.store(*max, std::memory_order_relaxed);
+        _counters.last_update_ns.store(tick.ts_ns, std::memory_order_relaxed);
+
     }
 
-    std::int64_t sum() const{
-        return _rolling_sum.get_sum();
-    }
+    // std::int64_t sum() const{
+    //     return _rolling_sum.get_sum();
+    // }
 
     private:
 
     RollingSum<30, 1000000000> _rolling_sum;
     RollingMax<30000000000> _rolling_max;
     RingBuffer<Tick, 65536> _ring_buffer;
-  //  Book<65536> _book;
+    // Book<65536, true> _book;
     Pool<Tick, 65536> pool;
+    
 
     TelemetryCounters& _counters;
 };
@@ -54,12 +61,11 @@ int main(){
 
     Telemetry telemetry(counters);
     telemetry.start();
-    // std::jthread telemetry_thread(&Telemetry::run, &telemetry);
 
     parser.start();
-    const auto& s = parser.stats();
-    std::println("packets {} messages {} ticks {} lost {} malformed {} sum {}",
-             s.packets, s.messages, s.ticks, s.lost_messages, s.malformed, handler.sum());    
+    // const auto& s = parser.stats();
+    // std::println("packets {} messages {} ticks {} lost {} malformed {} sum {}",
+    //          s.packets, s.messages, s.ticks, s.lost_messages, s.malformed, handler.sum());    
 
  
     return 0;

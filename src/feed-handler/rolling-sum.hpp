@@ -64,10 +64,9 @@ class RollingSum{
 
     }
 
-    // read the sum. Called by a telemetry thread
+    // read the sum. Called by the main thread.
     std::int64_t get_sum() const{
 
-        // TODO: make this thread-safe
         return _total_vol;
 
     }
