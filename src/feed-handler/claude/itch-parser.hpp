@@ -27,6 +27,84 @@
 #include <system_error>
 #include <utility>
 
+namespace itch {
+
+inline constexpr std::int64_t no_price = 0;
+
+// Every ITCH message starts with: type(1) stock locate(2) tracking number(2) timestamp(6)
+inline constexpr std::size_t header_size = 11;
+
+template <std::size_t nbytes>
+std::uint64_t load_be(const std::uint8_t* p){
+    std::uint64_t value = 0;
+    for(std::size_t i = 0 ; i < nbytes ; i++)
+        value = (value << 8) | p[i];
+    return value;
+}
+
+enum class Decoded { tick, skipped, malformed };
+
+// Decodes one ITCH message (without its length prefix). Executions and trades fill tick;
+// every other type is skipped. stock_locate 0 accepts every instrument.
+// Shared by ItchParser and by replays straight from an ITCH file.
+inline Decoded decode_tick(const std::uint8_t* msg, std::size_t len, std::uint16_t stock_locate, Tick& tick){
+
+    if ( len < header_size )
+        return Decoded::malformed;
+
+    if ( stock_locate != 0 && load_be<2>(msg + 1) != stock_locate )
+        return Decoded::skipped;
+
+    std::uint64_t price = 0;
+    std::uint64_t qty = 0;
+    std::uint64_t order_id = 0; // Q (cross trade) has no order reference
+
+    switch ( msg[0] ){
+
+        case 'E': // Order Executed: shares at 19, no price
+            if ( len < 31 ) return Decoded::malformed;
+            price = static_cast<std::uint64_t>(no_price);
+            order_id = load_be<8>(msg + 11);
+            qty = load_be<4>(msg + 19);
+            break;
+
+        case 'C': // Order Executed With Price: shares at 19, printable at 31, price at 32
+            if ( len < 36 ) return Decoded::malformed;
+            if ( msg[31] == 'N' )
+                return Decoded::skipped; // non-printable: already counted in a cross or trade message
+            order_id = load_be<8>(msg + 11);
+            qty = load_be<4>(msg + 19);
+            price = load_be<4>(msg + 32);
+            break;
+
+        case 'P': // Trade (non-cross): shares at 20, price at 32
+            if ( len < 44 ) return Decoded::malformed;
+            order_id = load_be<8>(msg + 11);
+            qty = load_be<4>(msg + 20);
+            price = load_be<4>(msg + 32);
+            break;
+
+        case 'Q': // Cross Trade: shares at 11 (8 bytes), price at 27
+            if ( len < 40 ) return Decoded::malformed;
+            qty = load_be<8>(msg + 11);
+            price = load_be<4>(msg + 27);
+            break;
+
+        default:
+            return Decoded::skipped;
+    }
+
+    // timestamp: nanoseconds since midnight. price: 4 implied decimals.
+    tick = Tick{static_cast<std::int64_t>(load_be<6>(msg + 5)),
+                static_cast<std::int64_t>(price),
+                static_cast<std::int64_t>(qty),
+                static_cast<std::int64_t>(order_id),
+                Operation::execute}; // E, C, P and Q are all executions
+    return Decoded::tick;
+}
+
+}  // namespace itch
+
 // Handler needs: void on_tick(const Tick&).
 // It is stored by value; pass a reference type (ItchParser<MyHandler&>) to share one.
 template <typename Handler>
@@ -35,7 +113,7 @@ class ItchParser{
 
     public:
 
-    static constexpr std::int64_t no_price = 0;
+    static constexpr std::int64_t no_price = itch::no_price;
 
     struct Config{
         std::string group{};                  // multicast group to join, empty for unicast
@@ -162,75 +240,32 @@ class ItchParser{
     static constexpr std::size_t mold_header_size = 20;
     static constexpr std::uint64_t mold_end_of_session = 0xFFFF;
 
-    // Every ITCH message starts with: type(1) stock locate(2) tracking number(2) timestamp(6)
-    static constexpr std::size_t itch_header_size = 11;
-
     template <std::size_t nbytes>
     static std::uint64_t load_be(const std::uint8_t* p){
-        std::uint64_t value = 0;
-        for(std::size_t i = 0 ; i < nbytes ; i++)
-            value = (value << 8) | p[i];
-        return value;
+        return itch::load_be<nbytes>(p);
     }
 
     void on_message(const std::uint8_t* msg, std::size_t len){
 
-        if ( len < itch_header_size ){
+        if ( len < itch::header_size ){
             ++_stats.malformed;
             return;
         }
 
         ++_stats.messages;
 
-        if ( _cfg.stock_locate != 0 && load_be<2>(msg + 1) != _cfg.stock_locate )
-            return;
-
-        std::uint64_t price = 0;
-        std::uint64_t qty = 0;
-        std::uint64_t order_id = 0; // Q (cross trade) has no order reference
-
-        switch ( msg[0] ){
-
-            case 'E': // Order Executed: shares at 19, no price
-                if ( len < 31 ) { ++_stats.malformed; return; }
-                price = static_cast<std::uint64_t>(no_price);
-                order_id = load_be<8>(msg + 11);
-                qty = load_be<4>(msg + 19);
+        Tick tick;
+        switch ( itch::decode_tick(msg, len, _cfg.stock_locate, tick) ){
+            case itch::Decoded::tick:
+                _handler.on_tick(tick);
+                ++_stats.ticks;
                 break;
-
-            case 'C': // Order Executed With Price: shares at 19, printable at 31, price at 32
-                if ( len < 36 ) { ++_stats.malformed; return; }
-                if ( msg[31] == 'N' )
-                    return; // non-printable: already counted in a cross or trade message
-                order_id = load_be<8>(msg + 11);
-                qty = load_be<4>(msg + 19);
-                price = load_be<4>(msg + 32);
+            case itch::Decoded::malformed:
+                ++_stats.malformed;
                 break;
-
-            case 'P': // Trade (non-cross): shares at 20, price at 32
-                if ( len < 44 ) { ++_stats.malformed; return; }
-                order_id = load_be<8>(msg + 11);
-                qty = load_be<4>(msg + 20);
-                price = load_be<4>(msg + 32);
+            case itch::Decoded::skipped:
                 break;
-
-            case 'Q': // Cross Trade: shares at 11 (8 bytes), price at 27
-                if ( len < 40 ) { ++_stats.malformed; return; }
-                qty = load_be<8>(msg + 11);
-                price = load_be<4>(msg + 27);
-                break;
-
-            default:
-                return;
         }
-
-        // timestamp: nanoseconds since midnight. price: 4 implied decimals.
-        _handler.on_tick(Tick{static_cast<std::int64_t>(load_be<6>(msg + 5)),
-                              static_cast<std::int64_t>(price),
-                              static_cast<std::int64_t>(qty),
-                              static_cast<std::int64_t>(order_id),
-                              Operation::execute}); // E, C, P and Q are all executions
-        ++_stats.ticks;
     }
 
     void open_socket(){
