@@ -112,7 +112,7 @@ The p50 cost is 13–28 ns, and it points the same way in every run. The two `SP
 
 ## Reproducing
 
-Raw results are on the Intel box in `~/claude/`, one folder per run: `spsc-baseline-`, `spsc-falsesharing-`, `spsc-falsesharing-speed100-`, `spsc-falsesharing-speed0-`, `spsc-pretouch-speed100-` and `spsc-prefault-speed100-`, each ending `20261101`.
+Raw results are on the Intel box in `~/Documents/dev/profiling/bench/`, one folder per run: `spsc-baseline-`, `spsc-falsesharing-`, `spsc-falsesharing-speed100-`, `spsc-falsesharing-speed0-`, `spsc-pretouch-speed100-` and `spsc-prefault-speed100-`, each ending `20261101`.
 
 Run 6, from `src/feed-handler/claude` at `64bc5dd` or later:
 

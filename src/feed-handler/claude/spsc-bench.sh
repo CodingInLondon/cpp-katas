@@ -35,6 +35,8 @@
 #   PORT          UDP port on 127.0.0.1 (default 12345)
 #   CXX, CXXFLAGS compiler and flags (default: g++-14, -O2 -march=native -DNDEBUG)
 #   NOISE         changes below this many percent are not reported (default 5)
+#   BUILD_ONLY    set to build the variants and print their paths, without running anything
+#                 (e.g. with CXXFLAGS="-O2 -march=native -DNDEBUG -g -fno-omit-frame-pointer" for perf)
 #
 # One-time setup on the Intel box:
 #   Data:   mkdir -p ~/itch-data && cd ~/itch-data
@@ -69,8 +71,9 @@ SENDER_CORE="${SENDER_CORE:-1}"
 PRODUCER_CORE="${PRODUCER_CORE:-2}"
 CONSUMER_CORE="${CONSUMER_CORE:-3}"
 PORT="${PORT:-12345}"
+BUILD_ONLY="${BUILD_ONLY:-}"
 
-[ -f "$ITCH_FILE" ] || {
+[ -n "$BUILD_ONLY" ] || [ -f "$ITCH_FILE" ] || {
     echo "ITCH file not found: $ITCH_FILE (set ITCH_FILE; download steps are in the header of $0)" >&2
     exit 1
 }
@@ -93,7 +96,7 @@ if [ -n "$DEPTH$PERIOD_NS" ] && { [ "$SOURCE" != memory ] || [ -z "$DEPTH" ] || 
     exit 1
 fi
 rmem_max="$(cat /proc/sys/net/core/rmem_max 2>/dev/null || echo 0)"
-if [ "$SOURCE" = udp ] && [ "$rmem_max" -lt $((64 << 20)) ]; then
+if [ -z "$BUILD_ONLY" ] && [ "$SOURCE" = udp ] && [ "$rmem_max" -lt $((64 << 20)) ]; then
     echo "warning: net.core.rmem_max is $rmem_max, the receiver asks for 64 MB; expect drops at high SPEED" \
          "(sudo sysctl -w net.core.rmem_max=134217728)" >&2
 fi
@@ -129,6 +132,11 @@ for i in "${!headers[@]}"; do
     "$CXX" -std=c++23 $CXXFLAGS -DSPSC_HEADER="\"${headers[$i]}\"" -DSPSC_BUCKETS="$BUCKETS" \
         "$SRC/spsc-bench.cpp" -lpthread -o "$BUILD/spsc-bench-v$i"
 done
+
+if [ -n "$BUILD_ONLY" ]; then
+    for i in "${!headers[@]}"; do echo "$BUILD/spsc-bench-v$i  ${labels[$i]}"; done
+    exit 0
+fi
 
 summary() { grep -m1 '^summary:' "$1" || echo "summary: none"; }
 

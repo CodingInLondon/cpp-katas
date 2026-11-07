@@ -144,7 +144,7 @@ In `e2e` mode, push-to-pop latency was 1.0 µs at depth 1, 32.76 ms at depth 32,
 
 ## Reproducing
 
-Raw results are on the Intel box, one folder per setting, with logs and `environment.txt`: `~/claude/spsc-stress-20261107/` for the main sweep and `~/claude/spsc-bursts-20261107/` for the 5,000–7,000 ns follow-up.
+Raw results are on the Intel box, one folder per setting, with logs and `environment.txt`: `~/Documents/dev/profiling/bench/spsc-stress-20261107/` for the main sweep and `~/Documents/dev/profiling/bench/spsc-bursts-20261107/` for the 5,000–7,000 ns follow-up.
 
 From `src/feed-handler/claude` at `9e8a785` or later:
 

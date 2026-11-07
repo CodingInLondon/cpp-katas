@@ -39,6 +39,14 @@
 //            consumer pops one tick every T ns on the same TSC schedule, so occupancy stays
 //            at D for the whole run. Only steady-state operations are measured: pushes after
 //            the pre-fill, and pops of ticks D to N-D.
+// --repeat R replays the decoded window R times in one run (memory source), so the traffic
+// lasts long enough to sample with perf without decoding the file again.
+//
+// Profiling: the threads are named spsc-producer and spsc-consumer. --perf-ctl CTL,ACK talks
+// to perf's control FIFOs (perf stat|record -D -1 --control fifo:CTL,ACK): counting is
+// enabled right before the traffic starts and disabled after the consumer has finished, so
+// decoding the ITCH file and the setup are not counted.
+//
 // At high occupancy the e2e row is mostly queueing (about occupancy x time per tick); the
 // push and pop rows from percall mode are what reflect the queue itself.
 //
@@ -133,8 +141,10 @@ struct Options {
     double speed = 10.0;                  // bursts: times real time, 0 = flat out
     std::size_t depth = 0;                // fixed: ticks kept in the queue
     double period_ns = 0;                 // fixed: one push and one pop every period
+    std::uint64_t repeat = 1;             // replays of the window
     // both
     double work_ns = 0;                   // consumer spin after each pop
+    std::string perf_ctl;                 // "CTL,ACK": perf control FIFOs
     int producer_core = -1;
     int consumer_core = -1;
 };
@@ -143,9 +153,10 @@ struct Options {
     std::fprintf(stderr,
                  "usage: %s [--mode e2e|percall] [--out FILE] [--variant NAME]\n"
                  "          [--producer-core N] [--consumer-core N] [--consumer-work-ns N]\n"
+                 "          [--perf-ctl CTL_FIFO,ACK_FIFO]\n"
                  "  udp:    [--port N] [--group IP] [--interface IP] [--rcvbuf BYTES] [--record-max N]\n"
                  "  memory: --source memory --itch-file PATH [--from HH:MM:SS] [--messages N]\n"
-                 "          [--speed X] | [--depth D --period-ns T]\n",
+                 "          [--repeat R] [--speed X] | [--depth D --period-ns T]\n",
                  argv0);
     std::exit(2);
 }
@@ -187,12 +198,18 @@ Options parse_args(int argc, char** argv) {
         else if (a == "--depth") o.depth = std::strtoull(v, nullptr, 10);
         else if (a == "--period-ns") o.period_ns = std::atof(v);
         else if (a == "--consumer-work-ns") o.work_ns = std::atof(v);
+        else if (a == "--repeat") o.repeat = std::strtoull(v, nullptr, 10);
+        else if (a == "--perf-ctl") o.perf_ctl = v;
         else if (a == "--producer-core") o.producer_core = std::atoi(v);
         else if (a == "--consumer-core") o.consumer_core = std::atoi(v);
         else usage(argv[0]);
     }
     const bool fixed = o.depth > 0 || o.period_ns > 0;
     if (o.memory && o.itch_file.empty()) usage(argv[0]);
+    if (o.repeat == 0 || (o.repeat > 1 && !o.memory)) {
+        std::fprintf(stderr, "--repeat needs --source memory and a count of at least 1\n");
+        std::exit(2);
+    }
     if (fixed && (!o.memory || o.depth == 0 || o.period_ns <= 0 || o.depth > capacity || o.work_ns > 0)) {
         std::fprintf(stderr, "fixed occupancy needs --source memory, --depth 1..%zu and --period-ns > 0, "
                              "and no --consumer-work-ns (the period paces the consumer)\n", capacity);
@@ -211,6 +228,60 @@ void pin(int core, const char* who) {
         std::exit(2);
     }
 }
+
+void name_thread(const char* name) {
+    pthread_setname_np(pthread_self(), name);
+}
+
+// perf's --control fifo:CTL,ACK protocol: write a command to CTL, perf answers "ack\n" on ACK.
+class PerfControl {
+public:
+    explicit PerfControl(const std::string& spec) {
+        if (spec.empty()) return;
+        const std::size_t comma = spec.find(',');
+        if (comma == std::string::npos) {
+            std::fprintf(stderr, "--perf-ctl expects CTL_FIFO,ACK_FIFO\n");
+            std::exit(2);
+        }
+        // Non-blocking opens, so a run without perf fails here instead of hanging:
+        // opening CTL for writing fails with ENXIO when nobody has it open for reading.
+        ctl_ = ::open(spec.substr(0, comma).c_str(), O_WRONLY | O_NONBLOCK | O_CLOEXEC);
+        ack_ = ::open(spec.substr(comma + 1).c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (ctl_ < 0 || ack_ < 0) {
+            std::perror("--perf-ctl (is perf running with --control fifo:CTL,ACK?)");
+            std::exit(2);
+        }
+        ::fcntl(ack_, F_SETFL, ::fcntl(ack_, F_GETFL) & ~O_NONBLOCK);   // wait for each ack
+    }
+    ~PerfControl() {
+        if (ctl_ >= 0) ::close(ctl_);
+        if (ack_ >= 0) ::close(ack_);
+    }
+    PerfControl(const PerfControl&) = delete;
+    PerfControl& operator=(const PerfControl&) = delete;
+
+    void enable() { send("enable\n"); }
+    void disable() { send("disable\n"); }
+
+private:
+    void send(std::string_view cmd) {
+        if (ctl_ < 0) return;
+        if (::write(ctl_, cmd.data(), cmd.size()) != static_cast<ssize_t>(cmd.size())) {
+            std::perror("--perf-ctl write");
+            return;
+        }
+        char c = 0;
+        while (c != '\n') {
+            if (::read(ack_, &c, 1) != 1) {
+                std::perror("--perf-ctl ack");
+                return;
+            }
+        }
+    }
+
+    int ctl_ = -1;
+    int ack_ = -1;
+};
 
 // Minor page faults taken by the calling thread so far.
 long minor_faults() {
@@ -328,10 +399,12 @@ struct Producer {
 };
 
 struct Consumer {
-    explicit Consumer(std::size_t record) : pop_tsc(prefaulted(record)) {
+    // record: ticks whose pop stamp is kept. e2e_long: room for long e2e samples, which at
+    // high occupancy is every tick.
+    Consumer(std::size_t record, std::size_t e2e_long) : pop_tsc(prefaulted(record)) {
         pop.prefault_long(long_samples);
         pop_empty.prefault_long(long_samples);
-        e2e.prefault_long(std::max(record, long_samples));
+        e2e.prefault_long(std::max(e2e_long, long_samples));
     }
 
     Histogram pop;
@@ -357,6 +430,7 @@ struct ConsumerPlan {
 
 template <bool PerCall>
 void consume(Consumer& c, const ConsumerPlan& p) {
+    name_thread("spsc-consumer");
     for (;;) {
         if (p.period) spin_until(p.t0 + c.popped * p.period);
         // Read before the pop: if the producer had finished, an empty pop means drained.
@@ -466,7 +540,7 @@ void write_json(const Options& o, const ClockInfo& ck, const Row* rows, std::siz
     }
     std::fprintf(f,
                  "{\n  \"context\": {\"variant\": \"%s\", \"mode\": \"%s\", \"buckets\": %d,\n"
-                 "    \"source\": \"%s\", \"speed\": %.3f, \"depth\": %zu, \"period_ns\": %.1f, \"work_ns\": %.1f,\n"
+                 "    \"source\": \"%s\", \"speed\": %.3f, \"depth\": %zu, \"period_ns\": %.1f, \"work_ns\": %.1f, \"repeat\": %llu,\n"
                  "    \"clock_step_ns\": %.3f, \"timer_overhead_ns\": %.3f, \"messages\": %llu, \"ticks\": %llu,\n"
                  "    \"lost_messages\": %llu, \"full\": %llu, \"empty_polls\": %llu, \"mticks_per_s\": %.3f,\n"
                  "    \"occupancy_p50\": %llu, \"occupancy_p90\": %llu, \"occupancy_p99\": %llu, "
@@ -474,7 +548,7 @@ void write_json(const Options& o, const ClockInfo& ck, const Row* rows, std::siz
                  "    \"occupancy_above_half\": %.4f, \"occupancy_above_90pct\": %.4f},\n"
                  "  \"benchmarks\": [\n",
                  o.variant.c_str(), o.percall ? "percall" : "e2e", SPSC_BUCKETS, o.memory ? "memory" : "udp",
-                 o.speed, o.depth, o.period_ns, o.work_ns, ck.step_ns,
+                 o.speed, o.depth, o.period_ns, o.work_ns, static_cast<unsigned long long>(o.repeat), ck.step_ns,
                  static_cast<double>(ck.overhead) * ck.ns_per_count, static_cast<unsigned long long>(s.messages),
                  static_cast<unsigned long long>(s.ticks), static_cast<unsigned long long>(s.lost),
                  static_cast<unsigned long long>(full), static_cast<unsigned long long>(empty), mticks_per_s,
@@ -564,8 +638,9 @@ int report(const Options& o, const ClockInfo& ck, Producer<PerCall>& producer, C
 template <bool PerCall>
 int run_udp(const Options& o, const ClockInfo& ck) {
     Producer<PerCall> producer(o.record_max);
-    Consumer consumer(o.record_max);
+    Consumer consumer(o.record_max, o.record_max);
     const ConsumerPlan plan{.work = static_cast<std::uint64_t>(o.work_ns / ck.ns_per_count)};
+    PerfControl perf(o.perf_ctl);
 
     // Bound in the constructor; "ready" tells spsc-bench.sh it can start the sender.
     ItchParser<Producer<PerCall>&> parser(producer, {.group = o.group,
@@ -573,6 +648,7 @@ int run_udp(const Options& o, const ClockInfo& ck) {
                                                      .port = o.port,
                                                      .rcvbuf_bytes = o.rcvbuf_bytes});
     pin(o.producer_core, "producer");
+    name_thread("spsc-producer");
     pretouch_queue();
 
     std::printf("ready\n");
@@ -585,11 +661,14 @@ int run_udp(const Options& o, const ClockInfo& ck) {
         consumer.page_faults = minor_faults() - faults_before;
     });
 
+    // Includes the wait for the sender's first packet
+    perf.enable();
     const long faults_before = minor_faults();
     parser.start();
     const long producer_faults = minor_faults() - faults_before;
     done.store(true, std::memory_order_release);
     consumer_thread.join();
+    perf.disable();
 
     const auto& st = parser.stats();
     const SourceInfo s{.messages = st.messages, .ticks = st.ticks, .lost = st.lost_messages,
@@ -599,24 +678,30 @@ int run_udp(const Options& o, const ClockInfo& ck) {
 
 template <bool PerCall>
 int run_memory(const Options& o, const ClockInfo& ck) {
+    PerfControl perf(o.perf_ctl);   // before decoding, so a wrong --perf-ctl fails at once
     const Window w = load_window(o);
     const std::vector<Tick>& ticks = w.ticks;
     const std::uint64_t n = ticks.size();
-    if (n == 0 || (o.depth && o.depth * 2 >= n)) {
+    const std::uint64_t total = n * o.repeat;   // ticks pushed: the window, o.repeat times
+    if (n == 0 || (o.depth && o.depth * 2 >= total)) {
         std::fprintf(stderr, "window has %llu ticks: too few%s\n", static_cast<unsigned long long>(n),
-                     o.depth ? " for this --depth (need more than 2 x depth)" : "");
+                     o.depth ? " for this --depth (need more than 2 x depth in total)" : "");
         return 2;
     }
-    std::printf("loaded %llu ticks from %llu messages\n", static_cast<unsigned long long>(n),
-                static_cast<unsigned long long>(w.messages));
+    std::printf("loaded %llu ticks from %llu messages, replayed %llu time(s)\n", static_cast<unsigned long long>(n),
+                static_cast<unsigned long long>(w.messages), static_cast<unsigned long long>(o.repeat));
 
-    Producer<PerCall> producer(n);
-    Consumer consumer(n);
+    // Stamps for occupancy are kept for the first record_cap ticks (8 bytes each per thread)
+    constexpr std::uint64_t record_cap = 4'000'000;
+    const std::size_t record = std::min(total, record_cap);
+    Producer<PerCall> producer(record);
+    Consumer consumer(record, total);
     const auto counts = [&](double ns) { return static_cast<std::uint64_t>(ns / ck.ns_per_count); };
     const std::uint64_t ms = counts(1e6);
     ConsumerPlan plan{.work = counts(o.work_ns)};
 
     pin(o.producer_core, "producer");
+    name_thread("spsc-producer");
     pretouch_queue();
     std::printf("ready\n");
     std::fflush(stdout);
@@ -637,35 +722,42 @@ int run_memory(const Options& o, const ClockInfo& ck) {
     if (o.depth) {
         // Pre-fill, then push tick k at t0 + (k - depth) * period while the consumer pops
         // tick j at t0 + j * period: depth ticks stay in the queue.
-        for (std::uint64_t k = 0; k < o.depth; k++) producer.on_tick(ticks[k]);
+        for (std::uint64_t k = 0; k < o.depth; k++) producer.on_tick(ticks[k % n]);
         push_from = o.depth;
         producer.measure_from = o.depth;
         const std::uint64_t period = counts(o.period_ns);
         plan.period = period;
         plan.t0 = stamp() + ms;
         plan.measure_from = o.depth;
-        plan.measure_to = n - o.depth;
+        plan.measure_to = total - o.depth;
         start_consumer();
+        perf.enable();
         faults_before = minor_faults();
-        for (std::uint64_t k = o.depth; k < n; k++) {
+        for (std::uint64_t k = o.depth; k < total; k++) {
             spin_until(plan.t0 + (k - o.depth) * period);
-            producer.on_tick(ticks[k]);
+            producer.on_tick(ticks[k % n]);
         }
     } else {
         start_consumer();
+        perf.enable();
         faults_before = minor_faults();
         const std::uint64_t t0 = stamp() + ms;
         const std::int64_t ts0 = ticks.front().ts_ns;
-        for (std::uint64_t k = 0; k < n; k++) {
-            if (o.speed > 0) spin_until(t0 + counts(static_cast<double>(ticks[k].ts_ns - ts0) / o.speed));
-            producer.on_tick(ticks[k]);
+        // Each replay starts 1 ms of market time after the previous one ends
+        const std::int64_t span = ticks.back().ts_ns - ts0 + 1'000'000;
+        for (std::uint64_t k = 0; k < total; k++) {
+            const Tick& t = ticks[k % n];
+            const std::int64_t market = t.ts_ns - ts0 + static_cast<std::int64_t>(k / n) * span;
+            if (o.speed > 0) spin_until(t0 + counts(static_cast<double>(market) / o.speed));
+            producer.on_tick(t);
         }
     }
     const long producer_faults = minor_faults() - faults_before;
     done.store(true, std::memory_order_release);
     consumer_thread.join();
+    perf.disable();
 
-    const SourceInfo s{.messages = w.messages, .ticks = n, .malformed = w.malformed};
+    const SourceInfo s{.messages = w.messages * o.repeat, .ticks = total, .malformed = w.malformed * o.repeat};
     return report<PerCall>(o, ck, producer, consumer, s, producer_faults, push_from);
 }
 
