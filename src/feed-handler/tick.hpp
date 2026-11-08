@@ -17,6 +17,7 @@ struct Tick {
     std::int64_t order_id;
 
     Operation op;
+    bool bid; // side
 
 };
 

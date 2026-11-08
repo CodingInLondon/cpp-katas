@@ -4,7 +4,7 @@
 #include "rolling-max.hpp"
 #include "pool.hpp"
 #include "spsc.hpp"
-// #include "book.hpp"
+#include "book.hpp"
 
 #include <thread>
 #include <print>
@@ -20,6 +20,8 @@ class TickHandler{
 
     void on_tick(const Tick& tick){
 
+        _ring_buffer.push(tick);
+
         // Calculate aggregates
         _rolling_sum.on_tick(tick);
         _rolling_max.on_tick(tick);
@@ -30,18 +32,19 @@ class TickHandler{
             _counters.rolling_max.store(*max, std::memory_order_relaxed);
         _counters.last_update_ns.store(tick.ts_ns, std::memory_order_relaxed);
 
+
+        //To delete
+        _book.on_tick(tick);
+
     }
 
-    // std::int64_t sum() const{
-    //     return _rolling_sum.get_sum();
-    // }
 
     private:
 
     RollingSum<30, 1000000000> _rolling_sum;
     RollingMax<30000000000> _rolling_max;
     RingBuffer<Tick, 65536> _ring_buffer;
-    // Book<65536, true> _book;
+    Book<65536, 65536> _book;
     Pool<Tick, 65536> pool;
     
 
@@ -54,19 +57,20 @@ int main(){
     TelemetryCounters counters;
     TickHandler handler(counters);
 
+    // Thread 1 (main thread, pinned to isolated core)
     ItchParser<TickHandler&> parser(handler, {
         .group = "239.1.1.1",
         .interface_ip = "10.211.55.5",
         .port = 12345});
 
+    // Thread 2 (pinned to isolated core)
+    // BookBuilder book_builder;
+
+    // Thread 3 (not pinned)
     Telemetry telemetry(counters);
     telemetry.start();
 
     parser.start();
-    // const auto& s = parser.stats();
-    // std::println("packets {} messages {} ticks {} lost {} malformed {} sum {}",
-    //          s.packets, s.messages, s.ticks, s.lost_messages, s.malformed, handler.sum());    
-
  
     return 0;
 }
