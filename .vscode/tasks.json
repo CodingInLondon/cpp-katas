@@ -74,6 +74,20 @@
         },
         {
             "type": "shell",
+            "label": "pool: regression test",
+            "command": "case \"${fileBasename}\" in main.cpp|pool*) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O0 -g -Wall -Wextra -Wshadow \"${workspaceFolder}/src/feed-handler/claude/pool-regression-test.cpp\" -o \"${workspaceFolder}/build/pool-regression-test-debug\" && \"${workspaceFolder}/build/pool-regression-test-debug\" && /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O2 -DNDEBUG -Wall -Wextra -Wshadow \"${workspaceFolder}/src/feed-handler/claude/pool-regression-test.cpp\" -o \"${workspaceFolder}/build/pool-regression-test-release\" && \"${workspaceFolder}/build/pool-regression-test-release\" ;; esac",
+            "options": {
+                "cwd": "${workspaceFolder}/src/feed-handler"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+            "detail": "Builds and runs the Pool regression test twice (asserts on, then -DNDEBUG) when the active file is main.cpp or pool*.",
+            "dependsOn": "mkdir build"
+        },
+        {
+            "type": "shell",
             "label": "spsc: stress test (tsan)",
             "command": "/usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -O1 -g -fsanitize=thread -Wall -Wextra -Wshadow \"${workspaceFolder}/src/feed-handler/claude/spsc-stress-test.cpp\" -o \"${workspaceFolder}/build/spsc-stress-test\" && setarch \"$(uname -m)\" -R \"${workspaceFolder}/build/spsc-stress-test\"",
             "options": {
@@ -89,7 +103,7 @@
         {
             "type": "shell",
             "label": "build active file (skip headers)",
-            "command": "case \"${fileExtname}\" in .h|.hpp) echo \"Header file: nothing to compile on its own.\" ;; *) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -Wall -Wextra -Wshadow -g \"${file}\" -o \"${workspaceFolder}/build/${fileBasenameNoExtension}\" ;; esac",
+            "command": "case \"${fileExtname}\" in .h|.hpp) echo \"Header file: nothing to compile on its own.\" ;; *) /usr/bin/g++-14 -fdiagnostics-color=always -std=c++23 -Wall -Wextra -Wshadow -O0 -g \"${file}\" -o \"${workspaceFolder}/build/${fileBasenameNoExtension}\" ;; esac",
             "options": {
                 "cwd": "${fileDirname}"
             },
@@ -102,10 +116,7 @@
         {
             "label": "build + regression",
             "dependsOn": [
-                "build active file (skip headers)",
-                "rolling-sum: regression test",
-                "rolling-max: regression test",
-                "spsc: regression test"
+                "build active file (skip headers)"
             ],
             "dependsOrder": "sequence",
             "group": {
