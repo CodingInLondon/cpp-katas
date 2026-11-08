@@ -1,8 +1,7 @@
 # cpp-katas
 C++ is dead, long live C++
 
-This is a sandbox where I experiment with modern C++ language features.
-
+This is a sandbox where I experiment with modern C++ language features and low-latency patterns. Most of the work is currently happening in the ``feed_handler`` directory.
 
 
 
@@ -17,12 +16,15 @@ This is a sandbox where I experiment with modern C++ language features.
 ```
 .
 ├── src/
-│   ├── *.cpp            scratch pads, standalone katas, one topic per file (atomics, coroutines, pools, SPSC queue, ...)
+│   ├── *.cpp            scratch pads, standalone katas
+│   ├── feed-handler/    training lab to practice low-latency patterns in a running system.
+│   │   └── claude       Test harnesses and bare-metal benchmarks
+│   │
 │   ├── modern/          one C++ example per language feature, grouped by standard (Claude-generated)
 │   │   ├── cpp11/ ... cpp23/
 │   │   └── build.sh     builds the examples
-│   ├── feed-handler/    training lab to write algorithms downstream of a feed handler with Claude-generated tick generator, regression tests and bench
 │   └── canons/          reference implementations (arena, pool, message parser)
+│
 └── docs/                rendered version of the md files (HTML, PDF)
 ```
 
