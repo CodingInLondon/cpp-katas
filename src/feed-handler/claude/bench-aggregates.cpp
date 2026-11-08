@@ -64,7 +64,7 @@ static std::vector<Tick> path_stream(std::int64_t gap, std::int64_t bucket_ns) {
         if (gap < 0)       ts = (i == 0) ? 1000 * bucket_ns : i;
         else if (gap == 0) ts = i;
         else               ts = (i + 1) * gap * bucket_ns;
-        v.push_back(Tick{ts, 1'000'000 + i, 1 + (i & 0xff)});
+        v.push_back(Tick{ts, 1'000'000 + i, 1 + (i & 0xff), 0, Operation::execute, false});
     }
     return v;
 }

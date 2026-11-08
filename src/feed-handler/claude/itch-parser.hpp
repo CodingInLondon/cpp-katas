@@ -58,6 +58,7 @@ inline Decoded decode_tick(const std::uint8_t* msg, std::size_t len, std::uint16
     std::uint64_t price = 0;
     std::uint64_t qty = 0;
     std::uint64_t order_id = 0; // Q (cross trade) has no order reference
+    bool bid = false;           // only P carries a side; E and C need the book to know it
 
     switch ( msg[0] ){
 
@@ -80,6 +81,7 @@ inline Decoded decode_tick(const std::uint8_t* msg, std::size_t len, std::uint16
         case 'P': // Trade (non-cross): shares at 20, price at 32
             if ( len < 44 ) return Decoded::malformed;
             order_id = load_be<8>(msg + 11);
+            bid = msg[19] == 'B';
             qty = load_be<4>(msg + 20);
             price = load_be<4>(msg + 32);
             break;
@@ -99,7 +101,8 @@ inline Decoded decode_tick(const std::uint8_t* msg, std::size_t len, std::uint16
                 static_cast<std::int64_t>(price),
                 static_cast<std::int64_t>(qty),
                 static_cast<std::int64_t>(order_id),
-                Operation::execute}; // E, C, P and Q are all executions
+                Operation::execute, // E, C, P and Q are all executions
+                bid};
     return Decoded::tick;
 }
 

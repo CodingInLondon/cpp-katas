@@ -33,7 +33,7 @@ static int failures = 0;
     } while (0)
 
 static Tick tick(std::int64_t ts, std::int64_t price){
-    return Tick{ts, price, 1, 0, Operation::execute};
+    return Tick{ts, price, 1, 0, Operation::execute, false};
 }
 
 // ---------------------------------------------------------------------------
