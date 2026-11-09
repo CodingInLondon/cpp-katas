@@ -1,8 +1,9 @@
+#pragma once
 #include <span>
-#include <cstdint>
 #include <cstring>
 #include <bit>
 
+// Used to receive the MoldUDP64 header
 struct MoldHeader{
     std::span<const std::byte, 10> session; //0
     std::uint64_t seq;                      //10
@@ -12,6 +13,7 @@ struct MoldHeader{
 constexpr std::size_t kMoldHeaderSize = 20;
 constexpr std::size_t kEndOfSession = 0xFFFF;
 
+// Helper function to convert from wire format to host
 template <std::integral T>
 T load_be(std::span<const std::byte, sizeof(T)> b){
 
@@ -25,6 +27,7 @@ T load_be(std::span<const std::byte, sizeof(T)> b){
     return destination;
 }
 
+// Parse the MoldUPD64 header (which contains ITCH messages)
 template <class Sink>
 bool parse_mold(std::span<const std::byte> pkt, Sink& sink){
     if (pkt.size() < kMoldHeaderSize)
@@ -46,20 +49,27 @@ bool parse_mold(std::span<const std::byte> pkt, Sink& sink){
         return true;
     }  
 
-
     std::size_t offset = kMoldHeaderSize;
 
     for(auto i = 0; i<header.count ; ++i){
 
-        std::uint16_t length = load_be<std::uint16_t>(pkt.subspan(offset, 2));
+        std::uint16_t message_length = load_be<std::uint16_t>(pkt.subspan(offset).first<2>());
 
-        // if (length > 0){
+        if (message_length > 0){
+            parse_itch(pkt.subspan(offset+2).first(message_length), sink);
             
-        // }
+        }
 
-
-
-        // offset = 
-
+        offset += 2 + message_length;
     }    
+
+    return true;
 }
+
+// Parse one ITCH message
+template <class Sink>
+bool parse_itch(std::span<const std::byte> pkt, Sink& sink){
+
+    return true;
+}
+
